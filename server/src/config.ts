@@ -1,0 +1,32 @@
+import { z } from 'zod';
+
+// Load ./.env when present (dev); env vars win in prod (ECS task definition).
+try {
+  process.loadEnvFile();
+} catch {
+  // no .env file — rely on process env / defaults
+}
+
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(4000),
+  CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost:3000'),
+  DB_HOST: z.string().default('127.0.0.1'),
+  // 3307 = the MySQL 8 dev container (docker-compose.yml); prod supplies its own.
+  DB_PORT: z.coerce.number().int().positive().default(3307),
+  DB_USER: z.string().default('fs_app'),
+  DB_PASSWORD: z.string().default('fs_app_dev'),
+  DB_NAME: z.string().default('fs_internal_system'),
+});
+
+const parsed = EnvSchema.safeParse(process.env);
+if (!parsed.success) {
+  // Fail fast: a misconfigured server must not boot.
+  console.error('Invalid environment configuration:', parsed.error.issues);
+  process.exit(1);
+}
+
+export const config = {
+  ...parsed.data,
+  corsOrigins: parsed.data.CORS_ORIGIN.split(',').map((o) => o.trim()),
+};
