@@ -8,6 +8,13 @@
       "when": 1784699969462,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1784701989339,
+      "tag": "0001_auth_departments",
+      "breakpoints": true
     }
   ]
 }

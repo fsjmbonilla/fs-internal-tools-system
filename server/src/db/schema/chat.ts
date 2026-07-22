@@ -10,11 +10,16 @@ import {
   varchar,
 } from 'drizzle-orm/mysql-core';
 import { users } from './auth.js';
+import { departments } from './departments.js';
 
 export const channels = mysqlTable('channels', {
   id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
   name: varchar('name', { length: 80 }).notNull().unique(),
   isPrivate: boolean('is_private').notNull().default(false),
+  departmentId: bigint('department_id', { mode: 'number', unsigned: true }).references(
+    () => departments.id,
+    { onDelete: 'set null' },
+  ),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
