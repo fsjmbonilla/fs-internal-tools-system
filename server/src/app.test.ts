@@ -11,13 +11,10 @@ describe('app', () => {
     expect(res.body).toEqual({ error: { code: 'not_found', message: 'Not found' } });
   });
 
-  it('exposes /health with the status contract', async () => {
+  it('reports healthy with the database reachable', async () => {
     const res = await request(app).get('/health');
-    // 200 {ok,up} with the DB reachable; 503 {degraded,down} without.
-    // The contract (shape) is what every consumer relies on.
-    expect([200, 503]).toContain(res.status);
-    expect(['ok', 'degraded']).toContain(res.body.status);
-    expect(['up', 'down']).toContain(res.body.db);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'ok', db: 'up' });
   });
 
   it('rejects an invalid channel id with a validation error', async () => {
