@@ -16,7 +16,7 @@ import {
 export const departmentsRouter = Router();
 departmentsRouter.use(requireAuth);
 
-function parseId(raw: string): number {
+function parseId(raw: string | string[]): number {
   const id = Number(raw);
   if (!Number.isInteger(id) || id <= 0) throw new AppError(400, 'validation_error', 'Bad id');
   return id;
