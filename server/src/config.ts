@@ -17,12 +17,20 @@ const EnvSchema = z.object({
   DB_USER: z.string().default('fs_app'),
   DB_PASSWORD: z.string().default('fs_app_dev'),
   DB_NAME: z.string().default('fs_internal_system'),
+  JWT_SECRET: z.string().min(16).default('dev-secret-change-me-not-for-prod'),
+  ACCESS_TTL_SEC: z.coerce.number().int().positive().default(900),
+  REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
 if (!parsed.success) {
   // Fail fast: a misconfigured server must not boot.
   console.error('Invalid environment configuration:', parsed.error.issues);
+  process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === 'production' && parsed.data.JWT_SECRET === 'dev-secret-change-me-not-for-prod') {
+  console.error('JWT_SECRET must be set in production');
   process.exit(1);
 }
 
