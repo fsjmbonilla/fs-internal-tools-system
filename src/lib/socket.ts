@@ -1,4 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
+import { useAuthStore } from '@/features/auth/authStore';
 
 // In production (ECS behind a load balancer) the socket server shares the app's
 // origin, so no URL is needed; locally, point at the dev server.
@@ -16,7 +17,12 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io(SERVER_URL, { autoConnect: true });
+    // autoConnect off: chat connects after login (Phase 2); the auth callback
+    // supplies the current access token on every (re)connect.
+    socket = io(SERVER_URL, {
+      autoConnect: false,
+      auth: (cb) => cb({ token: useAuthStore.getState().accessToken }),
+    });
   }
   return socket;
 }
@@ -30,8 +36,9 @@ export function leaveChannel(channelId: number): void {
 }
 
 export function sendMessage(
-  message: Pick<ChatMessage, 'channelId' | 'userId' | 'body'>,
+  message: Pick<ChatMessage, 'channelId' | 'body'>,
 ): Promise<{ ok: boolean; id?: number; error?: string }> {
+  // author identity comes from the server-side socket auth, never the payload
   return getSocket().emitWithAck('message:send', message);
 }
 

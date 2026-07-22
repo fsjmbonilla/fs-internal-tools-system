@@ -5,7 +5,6 @@ import { logger } from '../logger.js';
 
 interface SendPayload {
   channelId: number;
-  userId: number; // TODO(Phase 1): derive from socket.data.userId once socket auth lands
   body: string;
 }
 
@@ -21,15 +20,16 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
   });
 
   socket.on('message:send', async (payload: SendPayload, ack?: SendAck) => {
+    const userId = socket.data.userId as number;
     try {
       const [{ id }] = await db
         .insert(messages)
-        .values({ channelId: payload.channelId, userId: payload.userId, body: payload.body })
+        .values({ channelId: payload.channelId, userId, body: payload.body })
         .$returningId();
       io.to(`channel:${payload.channelId}`).emit('message:new', {
         id,
         channelId: payload.channelId,
-        userId: payload.userId,
+        userId,
         body: payload.body,
         createdAt: new Date().toISOString(),
       });
