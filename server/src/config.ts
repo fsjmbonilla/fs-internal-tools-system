@@ -12,8 +12,8 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost:3000'),
   DB_HOST: z.string().default('127.0.0.1'),
-  // 3307 = the MySQL 8 dev container (docker-compose.yml); prod supplies its own.
-  DB_PORT: z.coerce.number().int().positive().default(3307),
+  // 3306 = the system MariaDB (per user directive — no local MySQL install); prod is MySQL 8+.
+  DB_PORT: z.coerce.number().int().positive().default(3306),
   DB_USER: z.string().default('fs_app'),
   DB_PASSWORD: z.string().default('fs_app_dev'),
   DB_NAME: z.string().default('fs_internal_system'),

@@ -3,12 +3,12 @@ import { defineConfig } from 'drizzle-kit';
 try {
   process.loadEnvFile();
 } catch {
-  // no .env — defaults below match docker-compose.yml
+  // no .env — defaults below match the system MariaDB (see server/.env.example)
 }
 
 const {
   DB_HOST = '127.0.0.1',
-  DB_PORT = '3307',
+  DB_PORT = '3306',
   DB_USER = 'fs_app',
   DB_PASSWORD = 'fs_app_dev',
   DB_NAME = 'fs_internal_system',
