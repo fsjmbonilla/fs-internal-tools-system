@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FS Internal System</string>
+    <string name="title_activity_main">FS Internal System</string>
+    <string name="package_name">ph.flowerstore.fsinternal</string>
+    <string name="custom_url_scheme">ph.flowerstore.fsinternal</string>
+</resources>
