@@ -28,8 +28,14 @@ export function Lightbox({
     };
   }, [attachmentId]);
 
+  // Unmount the Dialog subtree entirely when closed, rather than toggling its
+  // `open` prop on an always-mounted Dialog: the latter leaves a lingering,
+  // still-interactive overlay behind if the close animation doesn't fully
+  // resolve, silently blocking clicks on whatever is underneath.
+  if (attachmentId === null) return null;
+
   return (
-    <Dialog open={attachmentId !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl">
         {src && <img src={src} alt="attachment preview" className="max-h-[80vh] w-full object-contain" />}
       </DialogContent>
