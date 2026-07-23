@@ -38,6 +38,12 @@ export function Sidebar() {
     <aside className="flex h-dvh w-64 flex-col bg-[#3f0e40] text-white">
       <div className="border-b border-white/10 p-4 font-semibold">FS Internal System</div>
       <ScrollArea className="flex-1 px-2 py-2">
+        <Link to="/projects" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
+          Projects
+        </Link>
+        <Link to="/notes" className="mb-4 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
+          Notes
+        </Link>
         <SidebarSection title="Channels">
           {orgWide.map((c) => (
             <ChannelLink key={c.id} channel={c} active={String(c.id) === channelId} />
