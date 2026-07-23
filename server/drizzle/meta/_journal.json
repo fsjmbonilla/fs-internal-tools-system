@@ -29,6 +29,20 @@
       "when": 1784809383101,
       "tag": "0003_message_fulltext",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1784811082567,
+      "tag": "0004_projects_docs_kanban_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1784811099724,
+      "tag": "0005_notes_fulltext",
+      "breakpoints": true
     }
   ]
 }

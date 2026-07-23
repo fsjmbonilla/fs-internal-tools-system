@@ -9,6 +9,13 @@ const TABLES = [
   'channel_members',
   'messages',
   'channels',
+  'task_comments',
+  'tasks',
+  'task_columns',
+  'docs',
+  'project_members',
+  'projects',
+  'notes',
   'settings',
   'users',
 ];
