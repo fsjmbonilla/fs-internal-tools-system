@@ -22,6 +22,10 @@ const EnvSchema = z.object({
   REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   // Opportunistic caching only — unset means cache.ts no-ops everywhere.
   MEMCACHED_SERVERS: z.string().optional(),
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  UPLOAD_DIR: z.string().default('./uploads'),
+  S3_BUCKET: z.string().optional(),
+  AWS_REGION: z.string().default('us-east-1'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
