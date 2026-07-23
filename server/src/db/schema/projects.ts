@@ -75,7 +75,7 @@ export const tasks = mysqlTable('tasks', {
   title: varchar('title', { length: 300 }).notNull(),
   description: text('description'),
   assigneeId: bigint('assignee_id', { mode: 'number', unsigned: true }).references(() => users.id),
-  dueDate: date('due_date'),
+  dueDate: date('due_date', { mode: 'string' }),
   position: double('position').notNull(),
   createdBy: bigint('created_by', { mode: 'number', unsigned: true }).notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
