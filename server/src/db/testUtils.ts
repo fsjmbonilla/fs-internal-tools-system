@@ -4,6 +4,8 @@ const TABLES = [
   'refresh_tokens',
   'department_members',
   'departments',
+  'message_reactions',
+  'message_mentions',
   'channel_members',
   'messages',
   'channels',
