@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../db/index.js';
-import { channels, messages, users } from '../db/schema/index.js';
+import { messages, users } from '../db/schema/index.js';
 import { resetDb } from '../db/testUtils.js';
 import { signAccessToken } from '../services/tokenService.js';
 import { registerSocketHandlers } from './index.js';
