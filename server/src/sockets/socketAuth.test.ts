@@ -38,22 +38,73 @@ describe('socket auth', () => {
   });
 
   it('accepts a valid token and stamps message author from socket identity', async () => {
+    const { createChannel } = await import('../services/channelService.js');
     const [{ id: userId }] = await db
       .insert(users)
       .values({ email: 's@flowerstore.ph', passwordHash: 'x', displayName: 'S' })
       .$returningId();
-    const [{ id: channelId }] = await db.insert(channels).values({ name: 'g' }).$returningId();
+    const channel = await createChannel({ name: 'g', isPrivate: false, createdBy: userId });
     const token = await signAccessToken({ id: userId, role: 'member' });
 
     const s = connect(token);
     await new Promise<void>((resolve) => s.on('connect', () => resolve()));
     // payload tries to spoof userId 999999 — server must ignore it
-    const ack = await s.emitWithAck('message:send', { channelId, body: 'hi', userId: 999_999 });
+    const ack = await s.emitWithAck('message:send', { channelId: channel.id, body: 'hi', userId: 999_999 });
     expect(ack.ok).toBe(true);
 
     const rows = await db.select().from(messages);
     expect(rows).toHaveLength(1);
     expect(rows[0].userId).toBe(userId);
     s.disconnect();
+  });
+
+  it('join is refused for a private channel the user cannot see; send/reactions/typing work for visible ones', async () => {
+    const { createChannel } = await import('../services/channelService.js');
+    const [{ id: memberId }] = await db
+      .insert(users)
+      .values({ email: 'member@flowerstore.ph', passwordHash: 'x', displayName: 'Member' })
+      .$returningId();
+    const [{ id: outsiderId }] = await db
+      .insert(users)
+      .values({ email: 'outsider@flowerstore.ph', passwordHash: 'x', displayName: 'Outsider' })
+      .$returningId();
+    const chan = await createChannel({ name: 'priv', isPrivate: true, createdBy: memberId });
+
+    const memberToken = await signAccessToken({ id: memberId, role: 'member' });
+    const outsiderToken = await signAccessToken({ id: outsiderId, role: 'member' });
+    const memberSocket = connect(memberToken);
+    const outsiderSocket = connect(outsiderToken);
+    await Promise.all([
+      new Promise<void>((resolve) => memberSocket.on('connect', () => resolve())),
+      new Promise<void>((resolve) => outsiderSocket.on('connect', () => resolve())),
+    ]);
+
+    memberSocket.emit('channel:join', chan.id);
+    outsiderSocket.emit('channel:join', chan.id); // should silently not join the room
+
+    const received: unknown[] = [];
+    outsiderSocket.on('message:new', (m) => received.push(m));
+    const ack = await memberSocket.emitWithAck('message:send', { channelId: chan.id, body: 'secret msg' });
+    expect(ack.ok).toBe(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(received).toHaveLength(0); // outsider never joined the room, never receives it
+
+    const reactAck = await memberSocket.emitWithAck('message:reaction', {
+      messageId: ack.message.id,
+      channelId: chan.id,
+      emoji: '👍',
+    });
+    expect(reactAck.ok).toBe(true);
+
+    // outsider is not a channel member: send is refused
+    const outsiderSendAck = await outsiderSocket.emitWithAck('message:send', {
+      channelId: chan.id,
+      body: 'i should not be able to send this',
+    });
+    expect(outsiderSendAck.ok).toBe(false);
+
+    memberSocket.disconnect();
+    outsiderSocket.disconnect();
   });
 });
