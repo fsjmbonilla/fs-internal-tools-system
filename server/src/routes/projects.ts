@@ -6,7 +6,15 @@ import { tasks as tasksTable } from '../db/schema/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
-import { createDoc, deleteDoc, getDoc, listDocs, updateDoc } from '../services/docService.js';
+import {
+  addDocAttachments,
+  createDoc,
+  deleteDoc,
+  getDoc,
+  getDocWithAttachments,
+  listDocs,
+  updateDoc,
+} from '../services/docService.js';
 import {
   addProjectMember,
   createProject,
@@ -17,9 +25,11 @@ import {
 } from '../services/projectService.js';
 import {
   addComment,
+  addTaskAttachments,
   createDefaultColumns,
   createTask,
   getBoard,
+  getTaskById,
   listComments,
   moveTask,
   updateTask,
@@ -107,6 +117,7 @@ const taskBody = z.object({
   description: z.string().max(10000).optional(),
   assigneeId: z.number().int().positive().optional(),
   dueDate: z.string().date().optional(),
+  attachmentIds: z.array(z.number().int().positive()).max(10).optional(),
 });
 
 projectsRouter.post('/:id/tasks', validate(taskBody), async (req, res) => {
@@ -120,6 +131,7 @@ projectsRouter.post('/:id/tasks', validate(taskBody), async (req, res) => {
 const docBody = z.object({
   title: z.string().min(1).max(200),
   content: z.string().max(200000).optional(),
+  attachmentIds: z.array(z.number().int().positive()).max(10).optional(),
 });
 
 projectsRouter.post('/:id/docs', validate(docBody), async (req, res) => {
@@ -147,8 +159,9 @@ async function requireVisibleDoc(docId: number, userId: number, isAdmin: boolean
 }
 
 docsRouter.get('/:id', async (req, res) => {
-  const doc = await requireVisibleDoc(parseId(req.params.id), req.auth!.userId, req.auth!.role === 'admin');
-  res.json({ doc });
+  const id = parseId(req.params.id);
+  await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
+  res.json({ doc: await getDocWithAttachments(id) });
 });
 
 const docPatch = z.object({
@@ -160,7 +173,7 @@ docsRouter.patch('/:id', validate(docPatch), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
   await updateDoc(id, req.valid as z.infer<typeof docPatch>, req.auth!.userId);
-  res.json({ doc: await getDoc(id) });
+  res.json({ doc: await getDocWithAttachments(id) });
 });
 
 docsRouter.delete('/:id', async (req, res) => {
@@ -168,6 +181,16 @@ docsRouter.delete('/:id', async (req, res) => {
   await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
   await deleteDoc(id);
   res.json({ ok: true });
+});
+
+const docAttachBody = z.object({ attachmentIds: z.array(z.number().int().positive()).min(1).max(10) });
+
+docsRouter.post('/:id/attachments', validate(docAttachBody), async (req, res) => {
+  const id = parseId(req.params.id);
+  await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
+  const ok = await addDocAttachments(id, req.auth!.userId, (req.valid as z.infer<typeof docAttachBody>).attachmentIds);
+  if (!ok) throw new AppError(400, 'invalid_attachment', 'One or more attachments could not be linked');
+  res.status(201).json({ doc: await getDocWithAttachments(id) });
 });
 
 export const tasksRouter = Router();
@@ -190,8 +213,9 @@ const taskPatch = z.object({
 });
 
 tasksRouter.get('/:id', async (req, res) => {
-  const task = await requireVisibleTask(parseId(req.params.id), req.auth!.userId, req.auth!.role === 'admin');
-  res.json({ task });
+  const id = parseId(req.params.id);
+  await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
+  res.json({ task: await getTaskById(id) });
 });
 
 tasksRouter.patch('/:id', validate(taskPatch), async (req, res) => {
@@ -199,6 +223,20 @@ tasksRouter.patch('/:id', validate(taskPatch), async (req, res) => {
   await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
   const task = await updateTask(id, req.valid as z.infer<typeof taskPatch>);
   res.json({ task });
+});
+
+const taskAttachBody = z.object({ attachmentIds: z.array(z.number().int().positive()).min(1).max(10) });
+
+tasksRouter.post('/:id/attachments', validate(taskAttachBody), async (req, res) => {
+  const id = parseId(req.params.id);
+  await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
+  const ok = await addTaskAttachments(
+    id,
+    req.auth!.userId,
+    (req.valid as z.infer<typeof taskAttachBody>).attachmentIds,
+  );
+  if (!ok) throw new AppError(400, 'invalid_attachment', 'One or more attachments could not be linked');
+  res.status(201).json({ task: await getTaskById(id) });
 });
 
 tasksRouter.delete('/:id', async (req, res) => {

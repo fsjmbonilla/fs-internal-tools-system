@@ -1,11 +1,20 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { taskColumns, taskComments, tasks, users } from '../db/schema/index.js';
+import { attachments, taskColumns, taskComments, tasks, users } from '../db/schema/index.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { linkAttachment } from './attachmentService.js';
 
 export interface ColumnDto {
   id: number;
   name: string;
   position: number;
+}
+
+export interface AttachmentInfo {
+  id: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 export interface TaskDto {
@@ -17,6 +26,7 @@ export interface TaskDto {
   assigneeId: number | null;
   dueDate: string | null;
   position: number;
+  attachments: AttachmentInfo[];
 }
 
 export interface CommentDto {
@@ -43,7 +53,7 @@ function toColumnDto(row: typeof taskColumns.$inferSelect): ColumnDto {
   return { id: row.id, name: row.name, position: row.position };
 }
 
-function toTaskDto(row: typeof tasks.$inferSelect): TaskDto {
+function toTaskDto(row: typeof tasks.$inferSelect, taskAttachments: AttachmentInfo[]): TaskDto {
   return {
     id: row.id,
     projectId: row.projectId,
@@ -53,7 +63,20 @@ function toTaskDto(row: typeof tasks.$inferSelect): TaskDto {
     assigneeId: row.assigneeId,
     dueDate: row.dueDate,
     position: row.position,
+    attachments: taskAttachments,
   };
+}
+
+async function hydrateAttachments(taskIds: number[]): Promise<Map<number, AttachmentInfo[]>> {
+  const map = new Map<number, AttachmentInfo[]>();
+  if (taskIds.length === 0) return map;
+  const rows = await db.select().from(attachments).where(inArray(attachments.taskId, taskIds));
+  for (const r of rows) {
+    const list = map.get(r.taskId!) ?? [];
+    list.push({ id: r.id, fileName: r.fileName, mimeType: r.mimeType, sizeBytes: r.sizeBytes });
+    map.set(r.taskId!, list);
+  }
+  return map;
 }
 
 export async function getBoard(
@@ -65,7 +88,18 @@ export async function getBoard(
     .where(eq(taskColumns.projectId, projectId))
     .orderBy(asc(taskColumns.position));
   const taskRows = await db.select().from(tasks).where(eq(tasks.projectId, projectId));
-  return { columns: columns.map(toColumnDto), tasks: taskRows.map(toTaskDto) };
+  const attachmentsByTask = await hydrateAttachments(taskRows.map((t) => t.id));
+  return {
+    columns: columns.map(toColumnDto),
+    tasks: taskRows.map((t) => toTaskDto(t, attachmentsByTask.get(t.id) ?? [])),
+  };
+}
+
+export async function getTaskById(id: number): Promise<TaskDto | null> {
+  const [row] = await db.select().from(tasks).where(eq(tasks.id, id));
+  if (!row) return null;
+  const attachmentsByTask = await hydrateAttachments([id]);
+  return toTaskDto(row, attachmentsByTask.get(id) ?? []);
 }
 
 async function maxPositionInColumn(columnId: number): Promise<number> {
@@ -84,6 +118,7 @@ export async function createTask(input: {
   assigneeId?: number;
   dueDate?: string;
   createdBy: number;
+  attachmentIds?: number[];
 }): Promise<TaskDto> {
   const position = (await maxPositionInColumn(input.columnId)) + GAP;
   const [{ id }] = await db
@@ -99,8 +134,13 @@ export async function createTask(input: {
       createdBy: input.createdBy,
     })
     .$returningId();
+  for (const attachmentId of input.attachmentIds ?? []) {
+    const ok = await linkAttachment(attachmentId, input.createdBy, { taskId: id });
+    if (!ok) throw new AppError(400, 'invalid_attachment', `Attachment ${attachmentId} could not be linked`);
+  }
   const [row] = await db.select().from(tasks).where(eq(tasks.id, id));
-  return toTaskDto(row);
+  const attachmentsByTask = await hydrateAttachments([id]);
+  return toTaskDto(row, attachmentsByTask.get(id) ?? []);
 }
 
 export async function updateTask(
@@ -114,7 +154,21 @@ export async function updateTask(
 ): Promise<TaskDto | null> {
   await db.update(tasks).set(patch).where(eq(tasks.id, id));
   const [row] = await db.select().from(tasks).where(eq(tasks.id, id));
-  return row ? toTaskDto(row) : null;
+  if (!row) return null;
+  const attachmentsByTask = await hydrateAttachments([id]);
+  return toTaskDto(row, attachmentsByTask.get(id) ?? []);
+}
+
+export async function addTaskAttachments(
+  taskId: number,
+  userId: number,
+  attachmentIds: number[],
+): Promise<boolean> {
+  for (const attachmentId of attachmentIds) {
+    const ok = await linkAttachment(attachmentId, userId, { taskId });
+    if (!ok) return false;
+  }
+  return true;
 }
 
 async function renormalizeColumn(columnId: number): Promise<void> {

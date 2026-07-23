@@ -10,9 +10,11 @@ import { authRouter } from './routes/auth.js';
 import { channelsRouter, messagesRouter, searchRouter } from './routes/channels.js';
 import { departmentsRouter } from './routes/departments.js';
 import { dmsRouter } from './routes/dms.js';
+import { filesRouter } from './routes/files.js';
 import { healthRouter } from './routes/health.js';
 import { notesRouter } from './routes/notes.js';
 import { docsRouter, projectsRouter, tasksRouter } from './routes/projects.js';
+import { uploadsRouter } from './routes/uploads.js';
 import { usersRouter } from './routes/users.js';
 
 export function createApp(): express.Express {
@@ -41,6 +43,8 @@ export function createApp(): express.Express {
   app.use('/api/docs', docsRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/notes', notesRouter);
+  app.use('/api/uploads', uploadsRouter);
+  app.use('/api/files', filesRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

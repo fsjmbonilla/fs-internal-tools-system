@@ -6,6 +6,7 @@ import { sendMessage, toggleReaction } from '../services/messageService.js';
 interface SendPayload {
   channelId: number;
   body: string;
+  attachmentIds?: number[];
 }
 
 interface ReactionPayload {
@@ -37,7 +38,7 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
         ack?.({ ok: false, error: 'not_found' });
         return;
       }
-      const message = await sendMessage(payload.channelId, userId, payload.body);
+      const message = await sendMessage(payload.channelId, userId, payload.body, payload.attachmentIds);
       io.to(`channel:${payload.channelId}`).emit('message:new', message);
       ack?.({ ok: true, message });
     } catch (err) {
