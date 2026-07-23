@@ -13,6 +13,13 @@ export interface Reaction {
   userIds: number[];
 }
 
+export interface MessageAttachment {
+  id: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export interface Message {
   id: number;
   channelId: number;
@@ -23,4 +30,5 @@ export interface Message {
   deletedAt: string | null;
   createdAt: string;
   reactions: Reaction[];
+  attachments: MessageAttachment[];
 }

@@ -37,7 +37,7 @@ export function leaveChannel(channelId: number): void {
 }
 
 export function sendMessage(
-  message: Pick<Message, 'channelId' | 'body'>,
+  message: Pick<Message, 'channelId' | 'body'> & { attachmentIds?: number[] },
 ): Promise<{ ok: boolean; message?: Message; error?: string }> {
   // author identity comes from the server-side socket auth, never the payload
   return getSocket().emitWithAck('message:send', message);

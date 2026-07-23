@@ -1,8 +1,17 @@
 import { and, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { channelMembers, channels, messageReactions, messages, users } from '../db/schema/index.js';
+import { attachments, channelMembers, channels, messageReactions, messages, users } from '../db/schema/index.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { linkAttachment } from './attachmentService.js';
 import { visibilityCondition } from './channelService.js';
 import { events } from './events.js';
+
+export interface AttachmentInfo {
+  id: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
 
 export interface MessageWithAuthor {
   id: number;
@@ -14,6 +23,7 @@ export interface MessageWithAuthor {
   deletedAt: Date | null;
   createdAt: Date;
   reactions: { emoji: string; userIds: number[] }[];
+  attachments: AttachmentInfo[];
 }
 
 type RawMessageRow = {
@@ -57,9 +67,22 @@ async function hydrateReactions(
   return map;
 }
 
+async function hydrateAttachments(messageIds: number[]): Promise<Map<number, AttachmentInfo[]>> {
+  const map = new Map<number, AttachmentInfo[]>();
+  if (messageIds.length === 0) return map;
+  const rows = await db.select().from(attachments).where(inArray(attachments.messageId, messageIds));
+  for (const r of rows) {
+    const list = map.get(r.messageId!) ?? [];
+    list.push({ id: r.id, fileName: r.fileName, mimeType: r.mimeType, sizeBytes: r.sizeBytes });
+    map.set(r.messageId!, list);
+  }
+  return map;
+}
+
 function toDto(
   row: RawMessageRow,
   reactions: Map<number, { emoji: string; userIds: number[] }[]>,
+  attachmentsByMessage: Map<number, AttachmentInfo[]>,
 ): MessageWithAuthor {
   return {
     id: row.id,
@@ -71,6 +94,7 @@ function toDto(
     deletedAt: row.deletedAt,
     createdAt: row.createdAt,
     reactions: reactions.get(row.id) ?? [],
+    attachments: attachmentsByMessage.get(row.id) ?? [],
   };
 }
 
@@ -78,8 +102,13 @@ export async function sendMessage(
   channelId: number,
   userId: number,
   body: string,
+  attachmentIds?: number[],
 ): Promise<MessageWithAuthor> {
   const [{ id }] = await db.insert(messages).values({ channelId, userId, body }).$returningId();
+  for (const attachmentId of attachmentIds ?? []) {
+    const ok = await linkAttachment(attachmentId, userId, { messageId: id });
+    if (!ok) throw new AppError(400, 'invalid_attachment', `Attachment ${attachmentId} could not be linked`);
+  }
   const [row] = await db
     .select(messageSelection)
     .from(messages)
@@ -90,7 +119,8 @@ export async function sendMessage(
     message: { id: row.id, channelId, userId, body },
     channel: { id: channel.id, isPrivate: channel.isPrivate },
   });
-  return toDto(row, new Map());
+  const attachmentsByMessage = await hydrateAttachments([id]);
+  return toDto(row, new Map(), attachmentsByMessage);
 }
 
 export async function getMessagesBefore(
@@ -108,7 +138,8 @@ export async function getMessagesBefore(
     .orderBy(desc(messages.id))
     .limit(limit);
   const reactions = await hydrateReactions(rows.map((r) => r.id));
-  return rows.map((r) => toDto(r, reactions));
+  const attachmentsByMessage = await hydrateAttachments(rows.map((r) => r.id));
+  return rows.map((r) => toDto(r, reactions, attachmentsByMessage));
 }
 
 export async function markRead(channelId: number, userId: number, messageId: number): Promise<void> {
@@ -191,5 +222,6 @@ export async function searchMessages(
     .orderBy(desc(messages.createdAt))
     .limit(50);
   const reactions = await hydrateReactions(rows.map((r) => r.id));
-  return rows.map((r) => toDto(r, reactions));
+  const attachmentsByMessage = await hydrateAttachments(rows.map((r) => r.id));
+  return rows.map((r) => toDto(r, reactions, attachmentsByMessage));
 }

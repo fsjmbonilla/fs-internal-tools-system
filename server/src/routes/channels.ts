@@ -126,7 +126,10 @@ channelsRouter.get('/:id/messages', validate(historyQuery, 'query'), async (req,
   res.json({ messages: list });
 });
 
-const sendBody = z.object({ body: z.string().min(1).max(4000) });
+const sendBody = z.object({
+  body: z.string().min(1).max(4000),
+  attachmentIds: z.array(z.number().int().positive()).max(10).optional(),
+});
 
 channelsRouter.post('/:id/messages', validate(sendBody), async (req, res) => {
   const id = parseId(req.params.id);
@@ -135,7 +138,8 @@ channelsRouter.post('/:id/messages', validate(sendBody), async (req, res) => {
   if (!isAdmin && !(await isChannelMember(id, req.auth!.userId))) {
     throw new AppError(404, 'not_found', 'Not found');
   }
-  const message = await sendMessage(id, req.auth!.userId, (req.valid as z.infer<typeof sendBody>).body);
+  const sendInput = req.valid as z.infer<typeof sendBody>;
+  const message = await sendMessage(id, req.auth!.userId, sendInput.body, sendInput.attachmentIds);
   res.status(201).json({ message });
 });
 

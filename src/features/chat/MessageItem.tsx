@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/features/auth/authStore';
+import { AttachmentChip } from '@/features/files/AttachmentChip';
 import { sendReaction } from '@/lib/socket';
 import { deleteMessageRest } from './api';
 import type { Message } from './types';
@@ -27,6 +28,13 @@ export function MessageItem({
           {message.editedAt && <span className="text-xs text-muted-foreground">(edited)</span>}
         </div>
         <p className="whitespace-pre-wrap text-sm">{message.body}</p>
+        {message.attachments.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {message.attachments.map((a) => (
+              <AttachmentChip key={a.id} attachment={a} />
+            ))}
+          </div>
+        )}
         {message.reactions.length > 0 && (
           <div className="mt-1 flex gap-1">
             {message.reactions.map((r) => (
