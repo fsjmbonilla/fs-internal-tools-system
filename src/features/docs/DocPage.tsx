@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { Paperclip } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { AttachmentChip, type AttachmentInfo } from '@/features/files/AttachmentChip';
 import { api } from '@/lib/api';
+import { uploadFiles } from '@/lib/uploads';
 import { Markdown } from './Markdown';
 
 interface Doc {
@@ -10,12 +13,14 @@ interface Doc {
   projectId: number;
   title: string;
   content: string;
+  attachments: AttachmentInfo[];
 }
 
 export function DocPage() {
   const { docId } = useParams();
   const id = Number(docId);
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { data } = useQuery({
     queryKey: ['doc', id],
     queryFn: () => api<{ doc: Doc }>(`/api/docs/${id}`),
@@ -33,6 +38,17 @@ export function DocPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['doc', id] }),
   });
 
+  const attach = useMutation({
+    mutationFn: async (files: File[]) => {
+      const uploaded = await uploadFiles(files);
+      return api(`/api/docs/${id}/attachments`, {
+        method: 'POST',
+        body: { attachmentIds: uploaded.map((f) => f.id) },
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['doc', id] }),
+  });
+
   if (!data) return null;
 
   return (
@@ -40,6 +56,26 @@ export function DocPage() {
       <div className="mb-2 flex items-center justify-between">
         <h2 className="font-semibold">{data.doc.title}</h2>
         <div className="flex gap-2">
+          <button
+            type="button"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
+            disabled={attach.isPending}
+            onClick={() => fileInputRef.current?.click()}
+            aria-label="Attach file"
+          >
+            <Paperclip className="size-4" />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = '';
+              if (files.length) attach.mutate(files);
+            }}
+          />
           <Button variant="outline" size="sm" onClick={() => setPreview((v) => !v)}>
             {preview ? 'Edit' : 'Preview'}
           </Button>
@@ -48,6 +84,13 @@ export function DocPage() {
           </Button>
         </div>
       </div>
+      {data.doc.attachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {data.doc.attachments.map((a) => (
+            <AttachmentChip key={a.id} attachment={a} />
+          ))}
+        </div>
+      )}
       {preview ? (
         <Markdown content={content} />
       ) : (
