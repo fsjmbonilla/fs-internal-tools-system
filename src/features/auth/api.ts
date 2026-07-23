@@ -1,4 +1,5 @@
 import { api, refreshOnce } from '@/lib/api';
+import { connectSocket, disconnectSocket } from '@/lib/socket';
 import { REFRESH_TOKEN_KEY, storage } from '@/lib/storage';
 import { type PublicUser, useAuthStore } from './authStore';
 
@@ -11,6 +12,7 @@ interface SessionResponse {
 async function adopt(session: SessionResponse): Promise<void> {
   await storage.set(REFRESH_TOKEN_KEY, session.refreshToken);
   useAuthStore.getState().setSession(session.user, session.accessToken);
+  connectSocket();
 }
 
 export async function loginUser(email: string, password: string): Promise<void> {
@@ -38,6 +40,7 @@ export async function registerUser(
 }
 
 export async function logoutUser(): Promise<void> {
+  disconnectSocket();
   const refreshToken = await storage.get(REFRESH_TOKEN_KEY);
   if (refreshToken) {
     await api('/api/auth/logout', {
@@ -52,5 +55,6 @@ export async function logoutUser(): Promise<void> {
 
 export async function bootstrapAuth(): Promise<void> {
   const ok = await refreshOnce();
-  if (!ok) useAuthStore.getState().clearSession();
+  if (ok) connectSocket();
+  else useAuthStore.getState().clearSession();
 }

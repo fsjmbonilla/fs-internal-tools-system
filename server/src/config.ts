@@ -20,6 +20,8 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(16).default('dev-secret-change-me-not-for-prod'),
   ACCESS_TTL_SEC: z.coerce.number().int().positive().default(900),
   REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  // Opportunistic caching only — unset means cache.ts no-ops everywhere.
+  MEMCACHED_SERVERS: z.string().optional(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

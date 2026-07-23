@@ -7,8 +7,9 @@ import { logger } from './logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { adminRouter } from './routes/admin.js';
 import { authRouter } from './routes/auth.js';
-import { channelsRouter } from './routes/channels.js';
+import { channelsRouter, messagesRouter, searchRouter } from './routes/channels.js';
 import { departmentsRouter } from './routes/departments.js';
+import { dmsRouter } from './routes/dms.js';
 import { healthRouter } from './routes/health.js';
 import { usersRouter } from './routes/users.js';
 
@@ -31,6 +32,9 @@ export function createApp(): express.Express {
   app.use('/api/admin', adminRouter);
   app.use('/api/departments', departmentsRouter);
   app.use('/api/channels', channelsRouter);
+  app.use('/api/messages', messagesRouter);
+  app.use('/api/search', searchRouter);
+  app.use('/api/dms', dmsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

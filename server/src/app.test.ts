@@ -17,9 +17,9 @@ describe('app', () => {
     expect(res.body).toEqual({ status: 'ok', db: 'up' });
   });
 
-  it('rejects an invalid channel id with a validation error', async () => {
+  it('requires auth before validating a channel id (401, not a leaked 400)', async () => {
     const res = await request(app).get('/api/channels/not-a-number/messages');
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('validation_error');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('unauthenticated');
   });
 });

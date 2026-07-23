@@ -15,6 +15,20 @@
       "when": 1784701989339,
       "tag": "0001_auth_departments",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1784809358036,
+      "tag": "0002_messaging",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1784809383101,
+      "tag": "0003_message_fulltext",
+      "breakpoints": true
     }
   ]
 }
