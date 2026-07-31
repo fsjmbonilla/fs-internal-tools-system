@@ -30,6 +30,11 @@ const EnvSchema = z.object({
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
+  // Teleconference: unlike push, there's no sensible offline behavior for a video
+  // call — unset means /api/calls responds 503 rather than silently no-opping.
+  LIVEKIT_URL: z.string().optional(),
+  LIVEKIT_API_KEY: z.string().optional(),
+  LIVEKIT_API_SECRET: z.string().optional(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
