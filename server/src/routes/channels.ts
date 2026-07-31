@@ -6,6 +6,7 @@ import { channelMembers, channels } from '../db/schema/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
+import { getActiveCallForChannel } from '../services/callService.js';
 import {
   addChannelMember,
   createChannel,
@@ -150,6 +151,13 @@ channelsRouter.post('/:id/read', validate(readBody), async (req, res) => {
   await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
   await markRead(id, req.auth!.userId, (req.valid as z.infer<typeof readBody>).messageId);
   res.json({ ok: true });
+});
+
+channelsRouter.get('/:id/call', async (req, res) => {
+  const id = parseId(req.params.id);
+  await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
+  const call = await getActiveCallForChannel(id);
+  res.json({ call });
 });
 
 export const messagesRouter = Router();

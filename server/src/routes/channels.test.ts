@@ -144,4 +144,18 @@ describe('channel routes', () => {
       ).status,
     ).toBe(200);
   });
+
+  it('GET /:id/call 404s for a channel the caller cannot see', async () => {
+    const owner = await makeUser(app, { email: 'callowner@flowerstore.ph' });
+    const outsider = await makeUser(app, { email: 'calloutsider@flowerstore.ph' });
+    const chan = await request(app)
+      .post('/api/channels')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ name: 'call-secret', isPrivate: true });
+
+    const res = await request(app)
+      .get(`/api/channels/${chan.body.channel.id}/call`)
+      .set('Authorization', `Bearer ${outsider.token}`);
+    expect(res.status).toBe(404);
+  });
 });
