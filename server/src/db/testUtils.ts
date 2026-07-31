@@ -8,6 +8,7 @@ const TABLES = [
   'device_tokens',
   'message_reactions',
   'message_mentions',
+  'support_configs',
   'calls',
   'channel_members',
   'messages',

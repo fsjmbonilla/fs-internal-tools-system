@@ -19,6 +19,7 @@ export const users = mysqlTable('users', {
   role: mysqlEnum('role', ['admin', 'member']).notNull().default('member'),
   avatarUrl: varchar('avatar_url', { length: 500 }),
   isActive: boolean('is_active').notNull().default(true),
+  isBot: boolean('is_bot').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
