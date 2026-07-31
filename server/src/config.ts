@@ -26,6 +26,10 @@ const EnvSchema = z.object({
   UPLOAD_DIR: z.string().default('./uploads'),
   S3_BUCKET: z.string().optional(),
   AWS_REGION: z.string().default('us-east-1'),
+  // Push notifications: unset means pushService.ts no-ops everywhere (mirrors MEMCACHED_SERVERS).
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().optional(),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
