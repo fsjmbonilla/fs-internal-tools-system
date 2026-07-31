@@ -14,6 +14,7 @@ import { filesRouter } from './routes/files.js';
 import { healthRouter } from './routes/health.js';
 import { notesRouter } from './routes/notes.js';
 import { docsRouter, projectsRouter, tasksRouter } from './routes/projects.js';
+import { pushRouter } from './routes/push.js';
 import { uploadsRouter } from './routes/uploads.js';
 import { usersRouter } from './routes/users.js';
 
@@ -43,6 +44,7 @@ export function createApp(): express.Express {
   app.use('/api/docs', docsRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/notes', notesRouter);
+  app.use('/api/push', pushRouter);
   app.use('/api/uploads', uploadsRouter);
   app.use('/api/files', filesRouter);
 
