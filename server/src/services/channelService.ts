@@ -64,6 +64,7 @@ export async function createChannel(input: {
   isPrivate: boolean;
   topic?: string;
   departmentId?: number;
+  kind?: 'standard' | 'support';
   createdBy: number;
 }): Promise<ChannelRow> {
   const [{ id }] = await db
@@ -72,6 +73,7 @@ export async function createChannel(input: {
       name: input.name,
       isPrivate: input.isPrivate,
       type: input.isPrivate ? 'private' : 'public',
+      kind: input.kind ?? 'standard',
       topic: input.topic,
       departmentId: input.departmentId,
       createdBy: input.createdBy,

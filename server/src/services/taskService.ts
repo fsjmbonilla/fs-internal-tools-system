@@ -27,6 +27,10 @@ export interface TaskDto {
   dueDate: string | null;
   position: number;
   attachments: AttachmentInfo[];
+  originChannelId: number | null;
+  originMessageId: number | null;
+  source: 'manual' | 'support';
+  priority: 'low' | 'medium' | 'high' | 'urgent' | null;
 }
 
 export interface CommentDto {
@@ -64,6 +68,10 @@ function toTaskDto(row: typeof tasks.$inferSelect, taskAttachments: AttachmentIn
     dueDate: row.dueDate,
     position: row.position,
     attachments: taskAttachments,
+    originChannelId: row.originChannelId,
+    originMessageId: row.originMessageId,
+    source: row.source,
+    priority: row.priority,
   };
 }
 
@@ -119,6 +127,10 @@ export async function createTask(input: {
   dueDate?: string;
   createdBy: number;
   attachmentIds?: number[];
+  originChannelId?: number;
+  originMessageId?: number;
+  source?: 'manual' | 'support';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
 }): Promise<TaskDto> {
   const position = (await maxPositionInColumn(input.columnId)) + GAP;
   const [{ id }] = await db
@@ -132,6 +144,10 @@ export async function createTask(input: {
       dueDate: input.dueDate,
       position,
       createdBy: input.createdBy,
+      originChannelId: input.originChannelId,
+      originMessageId: input.originMessageId,
+      source: input.source ?? 'manual',
+      priority: input.priority,
     })
     .$returningId();
   for (const attachmentId of input.attachmentIds ?? []) {

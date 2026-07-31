@@ -44,6 +44,7 @@ type RawMessageRow = {
   deletedAt: Date | null;
   createdAt: Date;
   displayName: string;
+  isBot: boolean;
 };
 
 const messageSelection = {
@@ -55,6 +56,7 @@ const messageSelection = {
   deletedAt: messages.deletedAt,
   createdAt: messages.createdAt,
   displayName: users.displayName,
+  isBot: users.isBot,
 };
 
 async function hydrateReactions(
@@ -138,8 +140,16 @@ export async function sendMessage(
   }
 
   events.emit('message.created', {
-    message: { id: row.id, channelId, userId, displayName: row.displayName, body, mentionedUserIds },
-    channel: { id: channel.id, type: channel.type, isPrivate: channel.isPrivate },
+    message: {
+      id: row.id,
+      channelId,
+      userId,
+      displayName: row.displayName,
+      body,
+      mentionedUserIds,
+      isBot: row.isBot,
+    },
+    channel: { id: channel.id, type: channel.type, kind: channel.kind, isPrivate: channel.isPrivate },
   });
   const attachmentsByMessage = await hydrateAttachments([id]);
   return toDto(row, new Map(), attachmentsByMessage);
