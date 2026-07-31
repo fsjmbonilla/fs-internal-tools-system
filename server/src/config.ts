@@ -35,6 +35,11 @@ const EnvSchema = z.object({
   LIVEKIT_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
+  // AI support intake: unset means aiService.ts returns null and supportIntake skips —
+  // chat must stay fully functional without AI (fail-soft, unlike LIVEKIT's 503).
+  OPENAI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default('gpt-5-nano'),
+  SUPPORT_DEBOUNCE_MS: z.coerce.number().int().nonnegative().default(5000),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
