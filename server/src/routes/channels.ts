@@ -25,6 +25,12 @@ import {
   softDeleteMessage,
   toggleReaction,
 } from '../services/messageService.js';
+import { getVisibleProject } from '../services/projectService.js';
+import {
+  getSupportConfig,
+  resolveIntakeColumnId,
+  upsertSupportConfig,
+} from '../services/supportConfigService.js';
 
 export const channelsRouter = Router();
 channelsRouter.use(requireAuth);
@@ -59,16 +65,54 @@ channelsRouter.get('/', async (req, res) => {
   res.json({ channels: list.map((c) => ({ ...c, unreadCount: unread[c.id] ?? 0 })) });
 });
 
+const supportConfigBody = z.object({
+  projectId: z.number().int().positive(),
+  intakeColumnId: z.number().int().positive().optional(),
+  instructions: z.string().max(2000).optional(),
+});
+
 const createBody = z.object({
   name: z.string().min(1).max(80),
   isPrivate: z.boolean(),
   topic: z.string().max(255).optional(),
   departmentId: z.number().int().positive().optional(),
+  kind: z.enum(['standard', 'support']).optional(),
+  supportConfig: supportConfigBody.optional(),
 });
+
+// A support channel files tickets into a project, so the creator must be able to see that
+// project — otherwise creating one would leak the existence of a private project.
+async function resolveSupportBinding(
+  input: z.infer<typeof supportConfigBody>,
+  userId: number,
+  isAdmin: boolean,
+): Promise<{ projectId: number; intakeColumnId: number; instructions?: string }> {
+  const project = await getVisibleProject(input.projectId, userId, isAdmin);
+  if (!project) throw new AppError(404, 'not_found', 'Not found');
+  const intakeColumnId = input.intakeColumnId ?? (await resolveIntakeColumnId(input.projectId));
+  if (intakeColumnId === null) {
+    throw new AppError(400, 'invalid_support_config', 'Target project has no columns to file tickets into');
+  }
+  return { projectId: input.projectId, intakeColumnId, instructions: input.instructions };
+}
 
 channelsRouter.post('/', validate(createBody), async (req, res) => {
   const input = req.valid as z.infer<typeof createBody>;
-  const channel = await createChannel({ ...input, createdBy: req.auth!.userId });
+  const isAdmin = req.auth!.role === 'admin';
+  const { kind, supportConfig, ...channelInput } = input;
+
+  if (kind === 'support' && !supportConfig) {
+    throw new AppError(400, 'invalid_support_config', 'A support channel requires supportConfig');
+  }
+  // Authorize the project binding BEFORE creating the channel, so a failed bind
+  // never leaves an orphaned support channel with no config behind.
+  const binding =
+    kind === 'support' && supportConfig
+      ? await resolveSupportBinding(supportConfig, req.auth!.userId, isAdmin)
+      : null;
+
+  const channel = await createChannel({ ...channelInput, kind, createdBy: req.auth!.userId });
+  if (binding) await upsertSupportConfig({ channelId: channel.id, ...binding });
   res.status(201).json({ channel });
 });
 
@@ -158,6 +202,40 @@ channelsRouter.get('/:id/call', async (req, res) => {
   await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
   const call = await getActiveCallForChannel(id);
   res.json({ call });
+});
+
+channelsRouter.get('/:id/support-config', async (req, res) => {
+  const id = parseId(req.params.id);
+  await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
+  res.json({ supportConfig: await getSupportConfig(id) });
+});
+
+const supportConfigPut = z.object({
+  projectId: z.number().int().positive(),
+  intakeColumnId: z.number().int().positive().optional(),
+  instructions: z.string().max(2000).nullable().optional(),
+  aiEnabled: z.boolean().optional(),
+});
+
+channelsRouter.put('/:id/support-config', validate(supportConfigPut), async (req, res) => {
+  const id = parseId(req.params.id);
+  const isAdmin = req.auth!.role === 'admin';
+  await requireVisibleChannel(id, req.auth!.userId, isAdmin);
+  await requireOwnerOrAdmin(id, req.auth!.userId, isAdmin);
+  const input = req.valid as z.infer<typeof supportConfigPut>;
+  const binding = await resolveSupportBinding(
+    { projectId: input.projectId, intakeColumnId: input.intakeColumnId },
+    req.auth!.userId,
+    isAdmin,
+  );
+  const supportConfig = await upsertSupportConfig({
+    channelId: id,
+    projectId: binding.projectId,
+    intakeColumnId: binding.intakeColumnId,
+    aiEnabled: input.aiEnabled,
+    instructions: input.instructions ?? null,
+  });
+  res.json({ supportConfig });
 });
 
 export const messagesRouter = Router();
