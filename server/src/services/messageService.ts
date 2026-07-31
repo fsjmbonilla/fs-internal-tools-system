@@ -1,10 +1,19 @@
 import { and, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { attachments, channelMembers, channels, messageReactions, messages, users } from '../db/schema/index.js';
+import {
+  attachments,
+  channelMembers,
+  channels,
+  messageMentions,
+  messageReactions,
+  messages,
+  users,
+} from '../db/schema/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { linkAttachment } from './attachmentService.js';
 import { visibilityCondition } from './channelService.js';
 import { events } from './events.js';
+import { parseMentions } from './mentionService.js';
 
 export interface AttachmentInfo {
   id: number;
@@ -115,9 +124,22 @@ export async function sendMessage(
     .innerJoin(users, eq(users.id, messages.userId))
     .where(eq(messages.id, id));
   const [channel] = await db.select().from(channels).where(eq(channels.id, channelId));
+
+  const members = await db
+    .select({ userId: channelMembers.userId, displayName: users.displayName })
+    .from(channelMembers)
+    .innerJoin(users, eq(users.id, channelMembers.userId))
+    .where(eq(channelMembers.channelId, channelId));
+  const mentionedUserIds = parseMentions(body, members, userId);
+  if (mentionedUserIds.length > 0) {
+    await db
+      .insert(messageMentions)
+      .values(mentionedUserIds.map((mentionedUserId) => ({ messageId: id, userId: mentionedUserId })));
+  }
+
   events.emit('message.created', {
-    message: { id: row.id, channelId, userId, body },
-    channel: { id: channel.id, isPrivate: channel.isPrivate },
+    message: { id: row.id, channelId, userId, displayName: row.displayName, body, mentionedUserIds },
+    channel: { id: channel.id, type: channel.type, isPrivate: channel.isPrivate },
   });
   const attachmentsByMessage = await hydrateAttachments([id]);
   return toDto(row, new Map(), attachmentsByMessage);

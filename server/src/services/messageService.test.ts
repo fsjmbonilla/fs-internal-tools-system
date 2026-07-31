@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../db/index.js';
-import { users } from '../db/schema/index.js';
+import { messageMentions, users } from '../db/schema/index.js';
 import { resetDb } from '../db/testUtils.js';
 import { addChannelMember, createChannel } from './channelService.js';
 import { events } from './events.js';
@@ -81,6 +81,24 @@ describe('messageService', () => {
     expect(await softDeleteMessage(msg.id, author)).toBe(true);
     const page = await getMessagesBefore(chan.id, null, 10);
     expect(page).toHaveLength(0); // soft-deleted, excluded from history
+  });
+
+  it('parses @mentions, persists them, and includes them on the emitted event', async () => {
+    const owner = await seedUser('owner@flowerstore.ph');
+    const jane = await seedUser('jane@flowerstore.ph');
+    const chan = await createChannel({ name: 'mentions', isPrivate: false, createdBy: owner });
+    await addChannelMember(chan.id, jane);
+
+    const handler = vi.fn();
+    events.on('message.created', handler);
+    await sendMessage(chan.id, owner, 'hey @jane look at this');
+    events.off('message.created', handler);
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.objectContaining({ mentionedUserIds: [jane] }) }),
+    );
+    const rows = await db.select().from(messageMentions);
+    expect(rows).toEqual([{ messageId: expect.any(Number), userId: jane }]);
   });
 
   it('search respects channel visibility', async () => {

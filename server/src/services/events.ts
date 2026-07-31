@@ -2,8 +2,15 @@ import { EventEmitter } from 'node:events';
 import { logger } from '../logger.js';
 
 export interface MessageCreatedEvent {
-  message: { id: number; channelId: number; userId: number; body: string };
-  channel: { id: number; isPrivate: boolean };
+  message: {
+    id: number;
+    channelId: number;
+    userId: number;
+    displayName: string;
+    body: string;
+    mentionedUserIds: number[];
+  };
+  channel: { id: number; type: 'public' | 'private' | 'dm'; isPrivate: boolean };
 }
 
 interface EventMap {
