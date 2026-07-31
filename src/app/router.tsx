@@ -2,6 +2,7 @@ import { Navigate, createBrowserRouter } from 'react-router';
 import { AdminPage } from '@/features/admin/AdminPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { CallPage } from '@/features/calls/CallPage';
 import { ChannelPage } from '@/features/chat/ChannelPage';
 import { DocListPage } from '@/features/docs/DocListPage';
 import { DocPage } from '@/features/docs/DocPage';
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
   {
     element: <RequireAuth />,
     children: [
+      { path: '/call/:roomName', element: <CallPage /> },
       {
         element: <AppLayout />,
         children: [

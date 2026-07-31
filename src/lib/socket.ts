@@ -80,3 +80,17 @@ export function onTyping(
   s.on('typing', handler);
   return () => s.off('typing', handler);
 }
+
+export function onCallStarted(
+  handler: (e: { channelId: number; callId: number; roomName: string }) => void,
+): () => void {
+  const s = getSocket();
+  s.on('call:started', handler);
+  return () => s.off('call:started', handler);
+}
+
+export function onCallEnded(handler: (e: { channelId: number; callId: number }) => void): () => void {
+  const s = getSocket();
+  s.on('call:ended', handler);
+  return () => s.off('call:ended', handler);
+}
