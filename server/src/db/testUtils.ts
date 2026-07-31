@@ -5,6 +5,7 @@ const TABLES = [
   'department_members',
   'departments',
   'attachments',
+  'device_tokens',
   'message_reactions',
   'message_mentions',
   'channel_members',
