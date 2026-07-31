@@ -1,4 +1,5 @@
 export * from './auth.js';
+export * from './calls.js';
 export * from './chat.js';
 export * from './departments.js';
 export * from './files.js';
