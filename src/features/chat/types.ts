@@ -25,6 +25,7 @@ export interface Message {
   channelId: number;
   userId: number;
   displayName: string;
+  isBot: boolean;
   body: string;
   editedAt: string | null;
   deletedAt: string | null;

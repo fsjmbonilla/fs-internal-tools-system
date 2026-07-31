@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { logoutUser } from '@/features/auth/api';
 import { useAuthStore } from '@/features/auth/authStore';
 import { api } from '@/lib/api';
 import { listChannels } from './api';
+import { NewSupportChannelDialog } from './NewSupportChannelDialog';
 import type { Channel } from './types';
 
 interface Department {
@@ -16,7 +18,8 @@ export function Sidebar() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { channelId } = useParams();
-  const { data: channelData } = useQuery({
+  const [supportOpen, setSupportOpen] = useState(false);
+  const { data: channelData, refetch: refetchChannels } = useQuery({
     queryKey: ['channels'],
     queryFn: listChannels,
     refetchInterval: 15_000,
@@ -44,7 +47,18 @@ export function Sidebar() {
         <Link to="/notes" className="mb-4 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
           Notes
         </Link>
-        <SidebarSection title="Channels">
+        <SidebarSection
+          title="Channels"
+          action={
+            <button
+              type="button"
+              className="text-xs text-white/60 hover:text-white"
+              onClick={() => setSupportOpen(true)}
+            >
+              + Support channel
+            </button>
+          }
+        >
           {orgWide.map((c) => (
             <ChannelLink key={c.id} channel={c} active={String(c.id) === channelId} />
           ))}
@@ -77,15 +91,29 @@ export function Sidebar() {
           Sign out
         </button>
       </div>
+      <NewSupportChannelDialog
+        open={supportOpen}
+        onOpenChange={setSupportOpen}
+        onCreated={() => refetchChannels()}
+      />
     </aside>
   );
 }
 
-function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
+function SidebarSection({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mb-4">
-      <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-white/50">
-        {title}
+      <div className="flex items-center justify-between px-2 py-1 text-xs font-semibold uppercase tracking-wide text-white/50">
+        <span>{title}</span>
+        {action}
       </div>
       {children}
     </div>

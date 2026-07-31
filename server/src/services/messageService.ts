@@ -27,6 +27,7 @@ export interface MessageWithAuthor {
   channelId: number;
   userId: number;
   displayName: string;
+  isBot: boolean;
   body: string;
   editedAt: Date | null;
   deletedAt: Date | null;
@@ -100,6 +101,7 @@ function toDto(
     channelId: row.channelId,
     userId: row.userId,
     displayName: row.displayName,
+    isBot: row.isBot,
     body: row.body,
     editedAt: row.editedAt,
     deletedAt: row.deletedAt,
