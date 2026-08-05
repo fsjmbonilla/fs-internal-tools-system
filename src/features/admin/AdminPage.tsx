@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AllowedDomainsTab } from './AllowedDomainsTab';
 import { DepartmentsTab } from './DepartmentsTab';
+import { TokensTab } from './TokensTab';
 import { UsersTab } from './UsersTab';
 
 export function AdminPage() {
@@ -12,6 +13,7 @@ export function AdminPage() {
           <TabsTrigger value="domains">Allowed domains</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="departments">Departments</TabsTrigger>
+          <TabsTrigger value="tokens">Service tokens</TabsTrigger>
         </TabsList>
         <TabsContent value="domains">
           <AllowedDomainsTab />
@@ -21,6 +23,9 @@ export function AdminPage() {
         </TabsContent>
         <TabsContent value="departments">
           <DepartmentsTab />
+        </TabsContent>
+        <TabsContent value="tokens">
+          <TokensTab />
         </TabsContent>
       </Tabs>
     </main>
