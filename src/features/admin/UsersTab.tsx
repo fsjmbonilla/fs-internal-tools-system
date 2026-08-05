@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table';
 import { useAuthStore } from '@/features/auth/authStore';
 import { api } from '@/lib/api';
+import { TransferNotesDialog } from './TransferNotesDialog';
 
 interface AdminUser {
   id: number;
@@ -52,6 +53,7 @@ export function UsersTab() {
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Active</TableHead>
+              <TableHead>Notes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -84,6 +86,11 @@ export function UsersTab() {
                       disabled={self || patch.isPending}
                       onCheckedChange={(isActive) => patch.mutate({ id: u.id, isActive })}
                     />
+                  </TableCell>
+                  <TableCell>
+                    {/* Offboarding: a departing colleague's notes are private and
+                        would otherwise be unreachable. Not offered for yourself. */}
+                    {!self && <TransferNotesDialog user={u} users={data?.users ?? []} />}
                   </TableCell>
                 </TableRow>
               );

@@ -62,6 +62,36 @@ export async function deleteNote(id: number, userId: number): Promise<boolean> {
   return true;
 }
 
+/** How many notes a user owns. A count only — never their contents. */
+export async function countNotes(userId: number): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(notes)
+    .where(eq(notes.userId, userId));
+  return Number(row.n);
+}
+
+/**
+ * Move every note from one person to another. Offboarding.
+ *
+ * Notes are private to their owner, which means that when someone leaves, their
+ * notes become unreachable — the rows outlive the person and nobody can open
+ * them. Deleting the account would cascade them away entirely (`onDelete:
+ * cascade`), so the work would simply be lost.
+ *
+ * Deliberately a *transfer*, not a grant: it changes who owns each note and
+ * gives the caller no way to read them. An admin can hand a departing
+ * colleague's notes to their manager without acquiring the power to read
+ * everyone's notes, which is the property that makes notes worth calling
+ * private at all.
+ */
+export async function transferNotes(fromUserId: number, toUserId: number): Promise<number> {
+  const moved = await countNotes(fromUserId);
+  if (moved === 0) return 0;
+  await db.update(notes).set({ userId: toUserId }).where(eq(notes.userId, fromUserId));
+  return moved;
+}
+
 export async function convertNoteToDoc(
   id: number,
   userId: number,

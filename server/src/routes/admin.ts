@@ -4,9 +4,11 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
+import { logger } from '../logger.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { events } from '../services/events.js';
+import { countNotes, transferNotes } from '../services/noteService.js';
 import { getAllowedDomains, setAllowedDomains } from '../services/settingsService.js';
 
 export const adminRouter = Router();
@@ -42,6 +44,54 @@ adminRouter.get('/users', async (_req, res) => {
     .from(users)
     .orderBy(users.displayName);
   res.json({ users: rows });
+});
+
+const transferBody = z.object({ toUserId: z.number().int().positive() });
+
+/**
+ * Hand one person's notes to another. The offboarding path.
+ *
+ * Admin-only, and a transfer rather than a grant: it moves ownership and returns
+ * a count, never any content. That keeps "notes are private" true — an admin can
+ * rescue a departing colleague's notes without gaining the ability to read
+ * anyone's.
+ */
+adminRouter.post('/users/:id/notes/transfer', validate(transferBody), async (req, res) => {
+  const fromId = Number(req.params.id);
+  if (!Number.isInteger(fromId) || fromId <= 0) {
+    throw new AppError(400, 'validation_error', 'Bad user id');
+  }
+  const { toUserId } = req.valid as z.infer<typeof transferBody>;
+  if (fromId === toUserId) {
+    throw new AppError(400, 'invalid_target', 'Source and destination are the same person');
+  }
+
+  const [from] = await db.select({ id: users.id }).from(users).where(eq(users.id, fromId));
+  if (!from) throw new AppError(404, 'not_found', 'Not found');
+  const [to] = await db
+    .select({ id: users.id, isActive: users.isActive })
+    .from(users)
+    .where(eq(users.id, toUserId));
+  // Handing notes to a deactivated account would make them unreachable again.
+  if (!to || !to.isActive) throw new AppError(404, 'not_found', 'Not found');
+
+  const transferred = await transferNotes(fromId, toUserId);
+  // Private content changing hands is worth a record, since there is no audit
+  // table yet: who did it, whose notes, and how many.
+  logger.info(
+    { actor: req.auth!.userId, from: fromId, to: toUserId, transferred },
+    'notes ownership transferred',
+  );
+  res.json({ transferred });
+});
+
+/** A count, so the console can say what a transfer would move. Never content. */
+adminRouter.get('/users/:id/notes/count', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new AppError(400, 'validation_error', 'Bad user id');
+  }
+  res.json({ count: await countNotes(id) });
 });
 
 const userPatch = z.object({
