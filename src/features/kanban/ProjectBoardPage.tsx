@@ -4,6 +4,7 @@ import { useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { useProjectMembership } from '@/features/projects/useProjectMembership';
 import { BoardColumn } from './BoardColumn';
 import { extractClosestEdge, monitorForElements } from './dnd';
 import { TaskDetailSheet } from './TaskDetailSheet';
@@ -31,12 +32,16 @@ export function ProjectBoardPage() {
   });
   const [newTitle, setNewTitle] = useState('');
   const [openTaskId, setOpenTaskId] = useState<number | null>(null);
+  const { canEdit } = useProjectMembership(id);
 
   useEffect(() => {
     return monitorForElements({
       onDrop({ source, location }) {
         const destination = location.current.dropTargets[0];
         if (!destination || source.data.type !== 'task') return;
+        // Non-members can read the board but not rearrange it; without this the
+        // card would snap to its new column and then bounce back on a 403.
+        if (!canEdit) return;
         const taskId = source.data.taskId as number;
         const destData = destination.data as { type: string; columnId: number; taskId?: number };
         const columnId = destData.columnId;
@@ -63,12 +68,13 @@ export function ProjectBoardPage() {
         }).then(() => queryClient.invalidateQueries({ queryKey: ['board', id] }));
       },
     });
-  }, [id, queryClient]);
+  }, [id, queryClient, canEdit]);
 
   if (!data) return null;
 
   return (
     <div className="flex h-full flex-col p-4">
+      {canEdit && (
       <div className="mb-3 flex gap-2">
         <Input
           placeholder="New task title"
@@ -89,6 +95,7 @@ export function ProjectBoardPage() {
           Add task
         </Button>
       </div>
+      )}
       <div className="flex flex-1 gap-3 overflow-x-auto">
         {data.columns.map((c) => (
           <BoardColumn

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { AttachmentChip, type AttachmentInfo } from '@/features/files/AttachmentChip';
 import { api } from '@/lib/api';
 import { rejectionMessage, uploadFiles } from '@/lib/uploads';
+import { useProjectMembership } from '@/features/projects/useProjectMembership';
 import { Markdown } from './Markdown';
 
 interface Doc {
@@ -17,7 +18,7 @@ interface Doc {
 }
 
 export function DocPage() {
-  const { docId } = useParams();
+  const { docId, projectId } = useParams();
   const id = Number(docId);
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -29,6 +30,8 @@ export function DocPage() {
   const [content, setContent] = useState('');
   const [preview, setPreview] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  // The doc carries its project id, so membership is resolved from that.
+  const { canEdit } = useProjectMembership(Number(projectId));
 
   useEffect(() => {
     if (data) setContent(data.doc.content);
@@ -68,6 +71,7 @@ export function DocPage() {
       <div className="mb-2 flex items-center justify-between">
         <h2 className="font-semibold">{data.doc.title}</h2>
         <div className="flex gap-2">
+          {canEdit && (
           <button
             type="button"
             className="rounded-md p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
@@ -77,6 +81,7 @@ export function DocPage() {
           >
             <Paperclip className="size-4" />
           </button>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -91,9 +96,11 @@ export function DocPage() {
           <Button variant="outline" size="sm" onClick={() => setPreview((v) => !v)}>
             {preview ? 'Edit' : 'Preview'}
           </Button>
-          <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-            Save
-          </Button>
+          {canEdit && (
+            <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+              Save
+            </Button>
+          )}
         </div>
       </div>
       {data.doc.attachments.length > 0 && (
@@ -103,7 +110,7 @@ export function DocPage() {
           ))}
         </div>
       )}
-      {preview ? (
+      {preview || !canEdit ? (
         <Markdown content={content} />
       ) : (
         <textarea

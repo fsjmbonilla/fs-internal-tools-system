@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { useProjectMembership } from '@/features/projects/useProjectMembership';
 
 interface Doc {
   id: number;
@@ -15,6 +16,7 @@ export function DocListPage() {
   const id = Number(projectId);
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
+  const { canEdit } = useProjectMembership(id);
   const { data } = useQuery({
     queryKey: ['docs', id],
     queryFn: () => api<{ docs: Doc[] }>(`/api/projects/${id}/docs`),
@@ -31,12 +33,14 @@ export function DocListPage() {
 
   return (
     <div className="p-4">
+      {canEdit && (
       <div className="mb-3 flex gap-2">
         <Input placeholder="New doc title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <Button disabled={!title.trim() || create.isPending} onClick={() => create.mutate()}>
           Add
         </Button>
       </div>
+      )}
       <ul className="grid gap-1">
         {data?.docs.map((d) => (
           <li key={d.id}>

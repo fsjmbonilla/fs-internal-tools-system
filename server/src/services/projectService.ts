@@ -35,6 +35,21 @@ export async function getVisibleProject(
   return row ?? null;
 }
 
+/**
+ * The projects this user belongs to, as a set.
+ *
+ * One query, so a project list can be annotated with membership without asking
+ * per project — the client needs it to know which buttons to show, and now that
+ * mutation requires membership, showing one that will 403 is a bug.
+ */
+export async function myProjectIds(userId: number): Promise<Set<number>> {
+  const rows = await db
+    .select({ projectId: projectMembers.projectId })
+    .from(projectMembers)
+    .where(eq(projectMembers.userId, userId));
+  return new Set(rows.map((r) => r.projectId));
+}
+
 export async function isProjectMember(projectId: number, userId: number): Promise<boolean> {
   const [row] = await db
     .select()

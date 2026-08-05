@@ -7,9 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { AttachmentChip, type AttachmentInfo } from '@/features/files/AttachmentChip';
 import { api } from '@/lib/api';
 import { rejectionMessage, uploadFiles } from '@/lib/uploads';
+import { useProjectMembership } from '@/features/projects/useProjectMembership';
 
 interface Task {
   id: number;
+  projectId: number;
   title: string;
   description: string | null;
   assigneeId: number | null;
@@ -37,6 +39,8 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
   });
   const [comment, setComment] = useState('');
   const [attachError, setAttachError] = useState<string | null>(null);
+  // Resolved from the loaded task: this sheet is opened from a board, not a route.
+  const { canEdit } = useProjectMembership(task?.task.projectId ?? Number.NaN);
 
   const addComment = useMutation({
     mutationFn: () => api(`/api/tasks/${taskId}/comments`, { method: 'POST', body: { body: comment } }),
@@ -80,15 +84,17 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
             )}
             <div className="mb-2 flex items-center justify-between">
               <h4 className="text-sm font-semibold">Attachments</h4>
-              <button
-                type="button"
-                className="rounded-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-50"
-                disabled={attach.isPending}
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach file"
-              >
-                <Paperclip className="size-4" />
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="rounded-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-50"
+                  disabled={attach.isPending}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach file"
+                >
+                  <Paperclip className="size-4" />
+                </button>
+              )}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -116,12 +122,17 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
                 </div>
               ))}
             </div>
-            <div className="mt-2 flex gap-2">
-              <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
-              <Button disabled={!comment.trim() || addComment.isPending} onClick={() => addComment.mutate()}>
-                Post
-              </Button>
-            </div>
+            {canEdit && (
+              <div className="mt-2 flex gap-2">
+                <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
+                <Button
+                  disabled={!comment.trim() || addComment.isPending}
+                  onClick={() => addComment.mutate()}
+                >
+                  Post
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </SheetContent>

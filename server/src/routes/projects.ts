@@ -21,6 +21,7 @@ import {
   getVisibleProject,
   isProjectMember,
   listVisibleProjects,
+  myProjectIds,
   removeProjectMember,
   updateProject,
 } from '../services/projectService.js';
@@ -70,8 +71,16 @@ async function requireProjectMember(projectId: number, userId: number, isAdmin: 
 }
 
 projectsRouter.get('/', async (req, res) => {
-  const projects = await listVisibleProjects(req.auth!.userId, req.auth!.role === 'admin');
-  res.json({ projects });
+  const isAdmin = req.auth!.role === 'admin';
+  const [projects, mine] = await Promise.all([
+    listVisibleProjects(req.auth!.userId, isAdmin),
+    myProjectIds(req.auth!.userId),
+  ]);
+  // isMember travels with the project so the client can tell a project it may
+  // only read from one it may change. Admins may change any of them.
+  res.json({
+    projects: projects.map((p) => ({ ...p, isMember: isAdmin || mine.has(p.id) })),
+  });
 });
 
 const createBody = z.object({
@@ -90,8 +99,10 @@ projectsRouter.post('/', validate(createBody), async (req, res) => {
 
 projectsRouter.get('/:id', async (req, res) => {
   const id = parseId(req.params.id);
-  const project = await requireVisibleProject(id, req.auth!.userId, req.auth!.role === 'admin');
-  res.json({ project });
+  const isAdmin = req.auth!.role === 'admin';
+  const project = await requireVisibleProject(id, req.auth!.userId, isAdmin);
+  const isMember = isAdmin || (await isProjectMember(id, req.auth!.userId));
+  res.json({ project: { ...project, isMember } });
 });
 
 const patchBody = z.object({

@@ -139,6 +139,40 @@ describe('project membership gates mutation', () => {
     ).toBe(404);
   });
 
+  it('tells the client whether it may change each project', async () => {
+    // The UI needs this: now that mutation requires membership, rendering an
+    // edit control for a non-member means rendering a button that 403s.
+    const s = await setup();
+
+    const asOwner = await request(app).get(`/api/projects/${s.projectId}`).set(auth(s.owner.token));
+    expect(asOwner.body.project.isMember).toBe(true);
+
+    const asVisitor = await request(app)
+      .get(`/api/projects/${s.projectId}`)
+      .set(auth(s.visitor.token));
+    expect(asVisitor.body.project.isMember).toBe(false);
+
+    // Admins may change any project, so the flag reflects that rather than
+    // making the client special-case roles.
+    const asAdmin = await request(app).get(`/api/projects/${s.projectId}`).set(auth(s.admin.token));
+    expect(asAdmin.body.project.isMember).toBe(true);
+  });
+
+  it('annotates the project list without a query per project', async () => {
+    const s = await setup();
+    const list = await request(app).get('/api/projects').set(auth(s.visitor.token));
+    const entry = list.body.projects.find((p: { id: number }) => p.id === s.projectId);
+    expect(entry.isMember).toBe(false);
+
+    await request(app)
+      .post(`/api/projects/${s.projectId}/members`)
+      .set(auth(s.owner.token))
+      .send({ userId: s.visitor.userId });
+
+    const after = await request(app).get('/api/projects').set(auth(s.visitor.token));
+    expect(after.body.projects.find((p: { id: number }) => p.id === s.projectId).isMember).toBe(true);
+  });
+
   it('requires membership to convert a note into a project doc', async () => {
     const s = await setup();
     const note = await request(app)
