@@ -32,12 +32,35 @@ export interface ChannelAccessRevokedEvent {
   channelId: number;
 }
 
+/**
+ * A task changed column.
+ *
+ * Emitted for support tickets so the conversation they came from hears about it:
+ * someone who reported a problem in a support channel otherwise has to go and
+ * look at a kanban board to find out whether anything happened.
+ *
+ * Only a real column change is emitted — moveTask also runs for reordering
+ * within a column, and announcing that would be noise.
+ */
+export interface TaskMovedEvent {
+  task: {
+    id: number;
+    title: string;
+    source: 'manual' | 'support';
+    originChannelId: number | null;
+  };
+  fromColumnName: string | null;
+  toColumnName: string;
+  movedByUserId: number | null;
+}
+
 export interface UserSessionsInvalidatedEvent {
   userId: number;
   reason: 'deactivated' | 'role_changed';
 }
 
 interface EventMap {
+  'task.moved': TaskMovedEvent;
   'message.created': MessageCreatedEvent;
   'access.channelRevoked': ChannelAccessRevokedEvent;
   'access.userSessionsInvalidated': UserSessionsInvalidatedEvent;

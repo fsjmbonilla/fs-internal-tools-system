@@ -1,7 +1,7 @@
 import { type InfiniteData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { onNewMessage, onReaction } from '@/lib/socket';
-import { getMessages } from './api';
+import { getMessages, markRead } from './api';
 import { MessageItem } from './MessageItem';
 import type { Message } from './types';
 
@@ -11,6 +11,8 @@ interface MessagesPage {
 
 export function MessageList({ channelId }: { channelId: number }) {
   const queryClient = useQueryClient();
+  // Highest message id already reported as read, so a re-render does not re-POST.
+  const lastMarked = useRef<number>(0);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ['messages', channelId],
@@ -60,9 +62,37 @@ export function MessageList({ channelId }: { channelId: number }) {
     };
   }, [channelId, queryClient]);
 
+  // A different channel has its own watermark; keeping the old one would skip
+  // marking the new channel read.
+  useEffect(() => {
+    lastMarked.current = 0;
+  }, [channelId]);
+
   const messages = data?.pages.flatMap((p) => p.messages) ?? [];
   // messages arrive newest-first per page; reverse for top-to-bottom display
   const ordered = [...messages].reverse();
+
+  // Reading a channel has to advance last_read_message_id, or the unread badge
+  // never clears: markRead existed in the API layer but nothing ever called it,
+  // so the count stayed on a channel you were looking at.
+  const newestId = messages.length > 0 ? Math.max(...messages.map((m) => m.id)) : null;
+  useEffect(() => {
+    // Re-runs as new messages arrive too, so the badge does not pop back up
+    // while the channel is open in front of you.
+    if (newestId === null || newestId <= lastMarked.current) return;
+    lastMarked.current = newestId;
+    markRead(channelId, newestId)
+      .then(() => {
+        // The sidebar reads both of these; without invalidating, the badge would
+        // linger until the next 15s poll.
+        void queryClient.invalidateQueries({ queryKey: ['channels'] });
+        void queryClient.invalidateQueries({ queryKey: ['dms'] });
+      })
+      .catch(() => {
+        // Non-critical: allow a retry on the next message rather than wedging.
+        lastMarked.current = 0;
+      });
+  }, [channelId, newestId, queryClient]);
 
   function removeMessage(id: number) {
     queryClient.setQueryData<InfiniteData<MessagesPage, number | undefined>>(['messages', channelId], (old) => {

@@ -302,7 +302,7 @@ tasksRouter.post('/:id/move', validate(moveBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const { columnId, beforeTaskId, afterTaskId } = req.valid as z.infer<typeof moveBody>;
-  await moveTask(id, columnId, beforeTaskId, afterTaskId);
+  await moveTask(id, columnId, beforeTaskId, afterTaskId, req.auth!.userId);
   res.json({ ok: true });
 });
 

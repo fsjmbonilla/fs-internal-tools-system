@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { attachments, taskColumns, taskComments, tasks, users } from '../db/schema/index.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { deleteAttachmentObjectsFor, linkAttachment } from './attachmentService.js';
+import { events } from './events.js';
 
 export interface ColumnDto {
   id: number;
@@ -203,6 +204,7 @@ export async function moveTask(
   columnId: number,
   beforeTaskId?: number,
   afterTaskId?: number,
+  movedByUserId?: number,
 ): Promise<void> {
   async function computePosition(): Promise<number> {
     const before = beforeTaskId
@@ -228,7 +230,33 @@ export async function moveTask(
     }
   }
 
+  // Read the task before the write so the previous column is still knowable.
+  const [before_] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   await db.update(tasks).set({ columnId, position }).where(eq(tasks.id, taskId));
+
+  // Reordering inside a column also comes through here; only a real column
+  // change is worth announcing.
+  if (!before_ || before_.columnId === columnId) return;
+
+  const columnRows = await db
+    .select({ id: taskColumns.id, name: taskColumns.name })
+    .from(taskColumns)
+    .where(inArray(taskColumns.id, [before_.columnId, columnId]));
+  const nameOf = (id: number) => columnRows.find((c) => c.id === id)?.name ?? null;
+  const toColumnName = nameOf(columnId);
+  if (!toColumnName) return; // column vanished under us; nothing meaningful to say
+
+  events.emit('task.moved', {
+    task: {
+      id: before_.id,
+      title: before_.title,
+      source: before_.source,
+      originChannelId: before_.originChannelId,
+    },
+    fromColumnName: nameOf(before_.columnId),
+    toColumnName,
+    movedByUserId: movedByUserId ?? null,
+  });
 }
 
 export async function deleteTask(id: number): Promise<void> {
