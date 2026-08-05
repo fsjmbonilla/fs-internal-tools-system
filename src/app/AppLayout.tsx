@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet } from 'react-router';
 import { QuickSwitcher } from '@/features/chat/QuickSwitcher';
 import { Sidebar } from '@/features/chat/Sidebar';
@@ -21,7 +21,17 @@ export function AppLayout() {
     <div className="flex h-dvh bg-background text-foreground">
       <Sidebar />
       <main className="flex-1 overflow-hidden">
-        <Outlet />
+        {/* Route components are code-split, so the first visit to a section
+            fetches its chunk. The sidebar stays put while that happens. */}
+        <Suspense
+          fallback={
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              Loading…
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
       </main>
       <QuickSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} />
     </div>

@@ -149,22 +149,37 @@ export async function markRead(channelId: number, userId: number, messageId: num
     .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)));
 }
 
+/**
+ * Unread count per channel the user belongs to.
+ *
+ * One query, not one per membership. This runs on every channel-list render —
+ * the most frequently hit query in the app — and the previous version issued a
+ * separate COUNT(*) for each channel, so its cost grew with how many channels a
+ * person was in.
+ *
+ * LEFT JOIN, so a channel with nothing unread still reports 0 rather than
+ * dropping out of the result.
+ */
 export async function getUnreadCounts(userId: number): Promise<Record<number, number>> {
-  const memberships = await db.select().from(channelMembers).where(eq(channelMembers.userId, userId));
+  const rows = await db
+    .select({
+      channelId: channelMembers.channelId,
+      count: sql<number>`count(${messages.id})`,
+    })
+    .from(channelMembers)
+    .leftJoin(
+      messages,
+      and(
+        eq(messages.channelId, channelMembers.channelId),
+        gt(messages.id, channelMembers.lastReadMessageId),
+        isNull(messages.deletedAt),
+      ),
+    )
+    .where(eq(channelMembers.userId, userId))
+    .groupBy(channelMembers.channelId);
+
   const result: Record<number, number> = {};
-  for (const m of memberships) {
-    const [row] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.channelId, m.channelId),
-          gt(messages.id, m.lastReadMessageId),
-          isNull(messages.deletedAt),
-        ),
-      );
-    result[m.channelId] = Number(row.count);
-  }
+  for (const row of rows) result[row.channelId] = Number(row.count);
   return result;
 }
 

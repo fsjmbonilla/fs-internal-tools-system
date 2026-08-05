@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -42,6 +43,22 @@ export function createApp(): express.Express {
       // HSTS only where TLS actually terminates; sending it from a plain-HTTP
       // dev server would pin localhost to HTTPS in the developer's browser.
       hsts: config.NODE_ENV === 'production',
+    }),
+  );
+
+  // Compress in-process rather than assuming something upstream does it: an ALB
+  // does not gzip, and message history is the payload that actually benefits.
+  // Static assets are a separate concern and belong to nginx/CloudFront, which
+  // can also serve brotli — `pm2 serve` is not a production asset server.
+  app.use(
+    compression({
+      filter: (req, res) => {
+        // Auth responses carry tokens. Compressing a response that mixes a
+        // secret with attacker-influenced input is the BREACH shape, and these
+        // are small enough that compression buys nothing anyway.
+        if (req.path.startsWith('/api/auth')) return false;
+        return compression.filter(req, res);
+      },
     }),
   );
 

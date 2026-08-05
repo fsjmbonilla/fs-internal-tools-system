@@ -1,15 +1,37 @@
+import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
-import { AdminPage } from '@/features/admin/AdminPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
-import { ChannelPage } from '@/features/chat/ChannelPage';
-import { DocListPage } from '@/features/docs/DocListPage';
-import { DocPage } from '@/features/docs/DocPage';
-import { ProjectBoardPage } from '@/features/kanban/ProjectBoardPage';
-import { NotesPage } from '@/features/notes/NotesPage';
-import { ProjectListPage } from '@/features/projects/ProjectListPage';
 import { AppLayout } from './AppLayout';
 import { RequireAdmin, RequireAuth } from './guards';
+
+/**
+ * Everything behind the login screen loads on demand.
+ *
+ * One bundle meant the login screen shipped all eight features, the kanban
+ * drag-and-drop engine and the whole markdown renderer before anyone had typed a
+ * password. Login and register stay eager — they are the first paint — and
+ * AppLayout holds the Suspense boundary the rest fall into.
+ */
+const ChannelPage = lazy(() =>
+  import('@/features/chat/ChannelPage').then((m) => ({ default: m.ChannelPage })),
+);
+const ProjectListPage = lazy(() =>
+  import('@/features/projects/ProjectListPage').then((m) => ({ default: m.ProjectListPage })),
+);
+const ProjectBoardPage = lazy(() =>
+  import('@/features/kanban/ProjectBoardPage').then((m) => ({ default: m.ProjectBoardPage })),
+);
+const DocListPage = lazy(() =>
+  import('@/features/docs/DocListPage').then((m) => ({ default: m.DocListPage })),
+);
+const DocPage = lazy(() => import('@/features/docs/DocPage').then((m) => ({ default: m.DocPage })));
+const NotesPage = lazy(() =>
+  import('@/features/notes/NotesPage').then((m) => ({ default: m.NotesPage })),
+);
+const AdminPage = lazy(() =>
+  import('@/features/admin/AdminPage').then((m) => ({ default: m.AdminPage })),
+);
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
