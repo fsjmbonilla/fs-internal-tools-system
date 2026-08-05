@@ -50,12 +50,19 @@ async function shutdown(signal: string): Promise<void> {
 
   clearInterval(gcTimer);
   try {
-    // Sockets first. They are long-lived by design, so closing the HTTP server
+    // Sockets first: they are long-lived by design, so closing the HTTP server
     // while they are still attached would always run out the clock.
+    //
+    // io.close() also closes the HTTP server it is attached to, so the guard
+    // below is not belt-and-braces — calling server.close() unconditionally
+    // throws ERR_SERVER_NOT_RUNNING, which sent this whole function down the
+    // error path and skipped pool.end().
     await io.close();
-    await new Promise<void>((resolve, reject) =>
-      server.close((err) => (err ? reject(err) : resolve())),
-    );
+    if (server.listening) {
+      await new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve())),
+      );
+    }
     await pool.end();
     logger.info('shutdown complete');
     process.exit(0);
