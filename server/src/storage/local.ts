@@ -1,5 +1,5 @@
 import { createReadStream, existsSync } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { StorageDriver } from './types.js';
 
@@ -28,5 +28,17 @@ export class LocalStorageDriver implements StorageDriver {
 
   async delete(key: string): Promise<void> {
     await rm(this.resolve(key), { force: true });
+  }
+
+  async list(prefix: string): Promise<string[]> {
+    const dir = this.resolve(prefix);
+    try {
+      const entries = await readdir(dir, { withFileTypes: true });
+      return entries.filter((e) => e.isFile()).map((e) => `${prefix}${e.name}`);
+    } catch (err) {
+      // Nothing uploaded yet is not an error — there is simply nothing to sweep.
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw err;
+    }
   }
 }

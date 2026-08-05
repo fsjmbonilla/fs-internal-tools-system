@@ -11,7 +11,7 @@ import {
   listNotes,
   updateNote,
 } from '../services/noteService.js';
-import { getVisibleProject } from '../services/projectService.js';
+import { getVisibleProject, isProjectMember } from '../services/projectService.js';
 
 export const notesRouter = Router();
 // requireAuth only ever authenticates user JWTs — no service-token scope exists
@@ -80,8 +80,15 @@ notesRouter.post('/:id/convert-to-doc', validate(convertBody), async (req, res) 
   // docsRouter do it. Without this, a note could be converted into a doc inside
   // a project the author cannot see — which both bypasses project visibility and
   // pushes personal note content somewhere its owner cannot follow it.
-  const project = await getVisibleProject(projectId, req.auth!.userId, req.auth!.role === 'admin');
+  const isAdmin = req.auth!.role === 'admin';
+  const project = await getVisibleProject(projectId, req.auth!.userId, isAdmin);
   if (!project) throw new AppError(404, 'not_found', 'Not found');
+  // Converting creates a doc, so it answers to the same rule as creating one
+  // through the projects router: members only, 403 once the project is known to
+  // be visible.
+  if (!isAdmin && !(await isProjectMember(projectId, req.auth!.userId))) {
+    throw new AppError(403, 'forbidden', 'Only project members can add documents');
+  }
   const doc = await convertNoteToDoc(id, req.auth!.userId, projectId);
   if (!doc) throw new AppError(404, 'not_found', 'Not found');
   res.status(201).json({ doc });

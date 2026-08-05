@@ -19,6 +19,7 @@ import {
   addProjectMember,
   createProject,
   getVisibleProject,
+  isProjectMember,
   listVisibleProjects,
   removeProjectMember,
   updateProject,
@@ -28,6 +29,7 @@ import {
   addTaskAttachments,
   createDefaultColumns,
   createTask,
+  deleteTask,
   getBoard,
   getTaskById,
   listComments,
@@ -47,6 +49,23 @@ function parseId(raw: string | string[]): number {
 async function requireVisibleProject(projectId: number, userId: number, isAdmin: boolean) {
   const project = await getVisibleProject(projectId, userId, isAdmin);
   if (!project) throw new AppError(404, 'not_found', 'Not found');
+  return project;
+}
+
+/**
+ * Reading a visible project is open; changing its contents is not.
+ *
+ * Phase 3 shipped mutation to any viewer and flagged it as a fast-follow, so a
+ * public project's tasks and docs could be edited by anyone who could see them.
+ * 403 rather than 404 here is deliberate and not an existence leak: the caller
+ * has already been told the project exists by the visibility check above.
+ */
+async function requireProjectMember(projectId: number, userId: number, isAdmin: boolean) {
+  const project = await requireVisibleProject(projectId, userId, isAdmin);
+  if (isAdmin) return project;
+  if (!(await isProjectMember(projectId, userId))) {
+    throw new AppError(403, 'forbidden', 'Only project members can change this project');
+  }
   return project;
 }
 
@@ -83,7 +102,7 @@ const patchBody = z.object({
 projectsRouter.patch('/:id', validate(patchBody), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
-  await requireVisibleProject(id, req.auth!.userId, isAdmin);
+  await requireProjectMember(id, req.auth!.userId, isAdmin);
   await updateProject(id, req.valid as z.infer<typeof patchBody>);
   const project = await getVisibleProject(id, req.auth!.userId, true);
   res.json({ project });
@@ -93,14 +112,14 @@ const memberBody = z.object({ userId: z.number().int().positive() });
 
 projectsRouter.post('/:id/members', validate(memberBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleProject(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await addProjectMember(id, (req.valid as z.infer<typeof memberBody>).userId);
   res.status(201).json({ ok: true });
 });
 
 projectsRouter.delete('/:id/members/:userId', async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleProject(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await removeProjectMember(id, parseId(req.params.userId));
   res.json({ ok: true });
 });
@@ -122,7 +141,7 @@ const taskBody = z.object({
 
 projectsRouter.post('/:id/tasks', validate(taskBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleProject(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const input = req.valid as z.infer<typeof taskBody>;
   const task = await createTask({ projectId: id, ...input, createdBy: req.auth!.userId });
   res.status(201).json({ task });
@@ -136,7 +155,7 @@ const docBody = z.object({
 
 projectsRouter.post('/:id/docs', validate(docBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleProject(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const input = req.valid as z.infer<typeof docBody>;
   const doc = await createDoc({ projectId: id, ...input, userId: req.auth!.userId });
   res.status(201).json({ doc });
@@ -158,6 +177,14 @@ async function requireVisibleDoc(docId: number, userId: number, isAdmin: boolean
   return doc;
 }
 
+/** Same as requireVisibleDoc, but for the routes that change the doc. */
+async function requireDocMember(docId: number, userId: number, isAdmin: boolean) {
+  const doc = await getDoc(docId);
+  if (!doc) throw new AppError(404, 'not_found', 'Not found');
+  await requireProjectMember(doc.projectId, userId, isAdmin);
+  return doc;
+}
+
 docsRouter.get('/:id', async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
@@ -171,14 +198,14 @@ const docPatch = z.object({
 
 docsRouter.patch('/:id', validate(docPatch), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireDocMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await updateDoc(id, req.valid as z.infer<typeof docPatch>, req.auth!.userId);
   res.json({ doc: await getDocWithAttachments(id) });
 });
 
 docsRouter.delete('/:id', async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireDocMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await deleteDoc(id);
   res.json({ ok: true });
 });
@@ -187,7 +214,7 @@ const docAttachBody = z.object({ attachmentIds: z.array(z.number().int().positiv
 
 docsRouter.post('/:id/attachments', validate(docAttachBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireDocMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const ok = await addDocAttachments(id, req.auth!.userId, (req.valid as z.infer<typeof docAttachBody>).attachmentIds);
   if (!ok) throw new AppError(400, 'invalid_attachment', 'One or more attachments could not be linked');
   res.status(201).json({ doc: await getDocWithAttachments(id) });
@@ -202,6 +229,14 @@ async function requireVisibleTask(taskId: number, userId: number, isAdmin: boole
   const [row] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
   if (!row) throw new AppError(404, 'not_found', 'Not found');
   await requireVisibleProject(row.projectId, userId, isAdmin);
+  return row;
+}
+
+/** Same as requireVisibleTask, but for the routes that change the task. */
+async function requireTaskMember(taskId: number, userId: number, isAdmin: boolean) {
+  const [row] = await db.select().from(tasksTable).where(eq(tasksTable.id, taskId));
+  if (!row) throw new AppError(404, 'not_found', 'Not found');
+  await requireProjectMember(row.projectId, userId, isAdmin);
   return row;
 }
 
@@ -220,7 +255,7 @@ tasksRouter.get('/:id', async (req, res) => {
 
 tasksRouter.patch('/:id', validate(taskPatch), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const task = await updateTask(id, req.valid as z.infer<typeof taskPatch>);
   res.json({ task });
 });
@@ -229,7 +264,7 @@ const taskAttachBody = z.object({ attachmentIds: z.array(z.number().int().positi
 
 tasksRouter.post('/:id/attachments', validate(taskAttachBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const ok = await addTaskAttachments(
     id,
     req.auth!.userId,
@@ -241,8 +276,8 @@ tasksRouter.post('/:id/attachments', validate(taskAttachBody), async (req, res) 
 
 tasksRouter.delete('/:id', async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
-  await db.delete(tasksTable).where(eq(tasksTable.id, id));
+  await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
+  await deleteTask(id);
   res.json({ ok: true });
 });
 
@@ -254,7 +289,7 @@ const moveBody = z.object({
 
 tasksRouter.post('/:id/move', validate(moveBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const { columnId, beforeTaskId, afterTaskId } = req.valid as z.infer<typeof moveBody>;
   await moveTask(id, columnId, beforeTaskId, afterTaskId);
   res.json({ ok: true });
@@ -264,7 +299,7 @@ const commentBody = z.object({ body: z.string().min(1).max(4000) });
 
 tasksRouter.post('/:id/comments', validate(commentBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
+  await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const comment = await addComment(id, req.auth!.userId, (req.valid as z.infer<typeof commentBody>).body);
   res.status(201).json({ comment });
 });

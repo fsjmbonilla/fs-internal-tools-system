@@ -1,3 +1,6 @@
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { config } from '../config.js';
 import { pool } from './index.js';
 
 const TABLES = [
@@ -21,8 +24,17 @@ const TABLES = [
   'users',
 ];
 
+/**
+ * Truncate the tables and clear stored uploads.
+ *
+ * Storage used to be left alone, so every suite that uploaded a file left its
+ * bytes in `server/uploads/` forever — dozens per run, growing with each test
+ * run, and enough to make any assertion about what is stored non-deterministic.
+ * The same blind spot in production is what Task B1 fixes.
+ */
 export async function resetDb(): Promise<void> {
   await pool.query('SET FOREIGN_KEY_CHECKS = 0');
   for (const t of TABLES) await pool.query(`TRUNCATE TABLE \`${t}\``);
   await pool.query('SET FOREIGN_KEY_CHECKS = 1');
+  await rm(join(config.UPLOAD_DIR, 'uploads'), { recursive: true, force: true });
 }

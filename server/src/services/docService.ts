@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { attachments, docs } from '../db/schema/index.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { linkAttachment } from './attachmentService.js';
+import { deleteAttachmentObjectsFor, linkAttachment } from './attachmentService.js';
 
 export type DocRow = typeof docs.$inferSelect;
 
@@ -80,5 +80,8 @@ export async function addDocAttachments(docId: number, userId: number, attachmen
 }
 
 export async function deleteDoc(id: number): Promise<void> {
+  // Objects first: the attachments rows cascade with the doc, and once they are
+  // gone nothing records which stored files belonged to it.
+  await deleteAttachmentObjectsFor({ docId: id });
   await db.delete(docs).where(eq(docs.id, id));
 }

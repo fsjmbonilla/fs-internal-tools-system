@@ -2,7 +2,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { attachments, taskColumns, taskComments, tasks, users } from '../db/schema/index.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { linkAttachment } from './attachmentService.js';
+import { deleteAttachmentObjectsFor, linkAttachment } from './attachmentService.js';
 
 export interface ColumnDto {
   id: number;
@@ -213,6 +213,13 @@ export async function moveTask(
   }
 
   await db.update(tasks).set({ columnId, position }).where(eq(tasks.id, taskId));
+}
+
+export async function deleteTask(id: number): Promise<void> {
+  // Objects first: the attachments rows cascade with the task, and after that
+  // nothing records which stored files were its.
+  await deleteAttachmentObjectsFor({ taskId: id });
+  await db.delete(tasks).where(eq(tasks.id, id));
 }
 
 export async function addComment(taskId: number, userId: number, body: string): Promise<CommentDto> {
