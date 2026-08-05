@@ -1,0 +1,2 @@
+ALTER TABLE `attachments` ADD `note_id` bigint unsigned;--> statement-breakpoint
+ALTER TABLE `attachments` ADD CONSTRAINT `attachments_note_id_notes_id_fk` FOREIGN KEY (`note_id`) REFERENCES `notes`(`id`) ON DELETE cascade ON UPDATE no action;

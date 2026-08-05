@@ -123,11 +123,11 @@ export async function createUnlinkedAttachment(input: {
 export async function linkAttachment(
   id: number,
   uploaderId: number,
-  target: { messageId?: number; taskId?: number; docId?: number },
+  target: { messageId?: number; taskId?: number; docId?: number; noteId?: number },
 ): Promise<boolean> {
   const [row] = await db.select().from(attachments).where(eq(attachments.id, id));
   if (!row || row.uploaderId !== uploaderId) return false;
-  if (row.messageId || row.taskId || row.docId) return false;
+  if (row.messageId || row.taskId || row.docId || row.noteId) return false;
   await db.update(attachments).set(target).where(eq(attachments.id, id));
   return true;
 }
@@ -141,6 +141,7 @@ export async function getAttachmentsFor(target: {
   messageId?: number;
   taskId?: number;
   docId?: number;
+  noteId?: number;
 }): Promise<AttachmentDto[]> {
   if (target.messageId) {
     return db.select().from(attachments).where(eq(attachments.messageId, target.messageId));
@@ -150,6 +151,9 @@ export async function getAttachmentsFor(target: {
   }
   if (target.docId) {
     return db.select().from(attachments).where(eq(attachments.docId, target.docId));
+  }
+  if (target.noteId) {
+    return db.select().from(attachments).where(eq(attachments.noteId, target.noteId));
   }
   return [];
 }
@@ -172,6 +176,7 @@ export async function deleteAttachmentObjectsFor(target: {
   taskId?: number;
   docId?: number;
   messageId?: number;
+  noteId?: number;
 }): Promise<number> {
   const rows = await getAttachmentsFor(target);
   const driver = getStorageDriver();
@@ -228,6 +233,7 @@ export async function gcUnlinkedAttachments(olderThanHours: number): Promise<num
         isNull(attachments.messageId),
         isNull(attachments.taskId),
         isNull(attachments.docId),
+        isNull(attachments.noteId),
         lt(attachments.createdAt, cutoff),
       ),
     );

@@ -1,6 +1,7 @@
 import { bigint, int, mysqlTable, timestamp, varchar } from 'drizzle-orm/mysql-core';
 import { users } from './auth.js';
 import { messages } from './chat.js';
+import { notes } from './notes.js';
 import { docs, tasks } from './projects.js';
 
 export const attachments = mysqlTable('attachments', {
@@ -15,6 +16,11 @@ export const attachments = mysqlTable('attachments', {
     onDelete: 'cascade',
   }),
   docId: bigint('doc_id', { mode: 'number', unsigned: true }).references(() => docs.id, {
+    onDelete: 'cascade',
+  }),
+  // A note is the fourth thing an attachment can belong to. Unlike the others it
+  // is owner-only — see the files route, which must not let an admin through.
+  noteId: bigint('note_id', { mode: 'number', unsigned: true }).references(() => notes.id, {
     onDelete: 'cascade',
   }),
   storageKey: varchar('storage_key', { length: 500 }).notNull(),
