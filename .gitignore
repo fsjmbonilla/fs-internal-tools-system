@@ -25,3 +25,10 @@ server/uploads/
 *.njsproj
 *.sln
 *.sw?
+
+# Firebase service-account keys — a private key that can send push as this project.
+# Pattern-matched rather than named, because the download filename varies.
+*firebase-adminsdk*.json
+*-service-account*.json
+google-services.json
+GoogleService-Info.plist
