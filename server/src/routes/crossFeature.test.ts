@@ -181,6 +181,31 @@ describe('DMs -> users: a DM is only ever created for a real, active pair', () =
     }
   });
 
+  it('names the person on the other side, and counts unread', async () => {
+    // The sidebar needs both. A DM has no name of its own, and the client should
+    // not have to parse dm_key to find out who it is talking to.
+    const a = await makeUser(app, { email: 'ann@flowerstore.ph' });
+    const b = await makeUser(app, { email: 'ben@flowerstore.ph' });
+    const dm = await request(app).post('/api/dms').set(auth(a.token)).send({ userId: b.userId });
+    const dmId = dm.body.channel.id;
+
+    let mine = await request(app).get('/api/dms').set(auth(a.token));
+    expect(mine.body.dms).toHaveLength(1);
+    expect(mine.body.dms[0].user.id).toBe(b.userId);
+    expect(mine.body.dms[0].user.displayName).toBe('ben');
+    expect(mine.body.dms[0].unreadCount).toBe(0);
+
+    // Each side sees the *other* person, not themselves.
+    const theirs = await request(app).get('/api/dms').set(auth(b.token));
+    expect(theirs.body.dms[0].user.id).toBe(a.userId);
+
+    await request(app).post(`/api/channels/${dmId}/messages`).set(auth(b.token)).send({ body: 'hi' });
+    await request(app).post(`/api/channels/${dmId}/messages`).set(auth(b.token)).send({ body: 'there' });
+
+    mine = await request(app).get('/api/dms').set(auth(a.token));
+    expect(mine.body.dms[0].unreadCount).toBe(2);
+  });
+
   it('keeps a DM out of the channel list and away from outsiders', async () => {
     const a = await makeUser(app, { email: 'a2@flowerstore.ph' });
     const b = await makeUser(app, { email: 'b2@flowerstore.ph' });

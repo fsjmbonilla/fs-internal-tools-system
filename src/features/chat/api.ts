@@ -24,7 +24,15 @@ export const markRead = (channelId: number, messageId: number) =>
 export const createDm = (userId: number) =>
   api<{ channel: Channel }>('/api/dms', { method: 'POST', body: { userId } });
 
-export const listMyDms = () => api<{ dms: { id: number; dmKey: string | null }[] }>('/api/dms');
+export interface DmSummary {
+  id: number;
+  dmKey: string | null;
+  /** Resolved server-side: a DM has no name of its own. */
+  user: { id: number; displayName: string; avatarUrl: string | null } | null;
+  unreadCount: number;
+}
+
+export const listMyDms = () => api<{ dms: DmSummary[] }>('/api/dms');
 
 export const searchMessages = (q: string, channelId?: number) => {
   const params = new URLSearchParams({ q });

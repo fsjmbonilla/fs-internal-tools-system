@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import {
   CommandDialog,
@@ -20,6 +20,7 @@ export function QuickSwitcher({
   onOpenChange: (v: boolean) => void;
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: channelData } = useQuery({
     queryKey: ['channels'],
     queryFn: listChannels,
@@ -59,6 +60,9 @@ export function QuickSwitcher({
               value={u.displayName}
               onSelect={async () => {
                 const { channel } = await createDm(u.id);
+                // So a brand-new DM shows up in the sidebar's list right away
+                // rather than on the next 15s refetch.
+                await queryClient.invalidateQueries({ queryKey: ['dms'] });
                 navigate(`/chat/${channel.id}`);
                 onOpenChange(false);
               }}

@@ -1,6 +1,6 @@
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { channelMembers, channels, departmentMembers } from '../db/schema/index.js';
+import { channelMembers, channels, departmentMembers, users } from '../db/schema/index.js';
 import { events } from './events.js';
 
 export type ChannelRow = typeof channels.$inferSelect;
@@ -129,10 +129,59 @@ export async function findOrCreateDm(userIdA: number, userIdB: number): Promise<
   return row;
 }
 
-export async function listMyDms(userId: number) {
-  return db
+export interface DmSummary {
+  id: number;
+  dmKey: string | null;
+  /** The person on the other side, or null if their account is gone. */
+  user: { id: number; displayName: string; avatarUrl: string | null } | null;
+}
+
+/**
+ * The user's DMs, each named by the person on the other side.
+ *
+ * Resolved here rather than in the client: a DM has no name of its own, and the
+ * only other clue is `dmKey` ('dm:<lo>:<hi>'). Parsing that in the UI would put
+ * the key format — an internal detail of how the pair is deduplicated — into
+ * every consumer.
+ *
+ * Two queries regardless of how many DMs there are.
+ */
+export async function listMyDms(userId: number): Promise<DmSummary[]> {
+  const mine = await db
     .select({ id: channels.id, dmKey: channels.dmKey })
     .from(channels)
     .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
     .where(and(eq(channels.type, 'dm'), eq(channelMembers.userId, userId)));
+  if (mine.length === 0) return [];
+
+  const others = await db
+    .select({
+      channelId: channelMembers.channelId,
+      id: users.id,
+      displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(channelMembers)
+    .innerJoin(users, eq(users.id, channelMembers.userId))
+    .where(
+      and(
+        inArray(
+          channelMembers.channelId,
+          mine.map((m) => m.id),
+        ),
+        ne(channelMembers.userId, userId),
+      ),
+    );
+
+  const byChannel = new Map(others.map((o) => [o.channelId, o]));
+  return mine.map((dm) => {
+    const other = byChannel.get(dm.id);
+    return {
+      id: dm.id,
+      dmKey: dm.dmKey,
+      user: other
+        ? { id: other.id, displayName: other.displayName, avatarUrl: other.avatarUrl }
+        : null,
+    };
+  });
 }
