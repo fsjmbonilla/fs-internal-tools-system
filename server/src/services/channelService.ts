@@ -94,12 +94,32 @@ export async function findOrCreateDm(userIdA: number, userIdB: number): Promise<
   const dmKey = `dm:${lo}:${hi}`;
   const [existing] = await db.select().from(channels).where(eq(channels.dmKey, dmKey));
   if (existing) return existing;
-  const [{ id }] = await db
-    .insert(channels)
-    .values({ type: 'dm', isPrivate: true, dmKey, createdBy: userIdA })
-    .$returningId();
-  await addChannelMember(id, userIdA);
-  await addChannelMember(id, userIdB);
+
+  // Channel and both memberships in one transaction. A half-created DM is worse
+  // than none at all: the row holds the pair's dm_key, so the lookup above would
+  // keep returning a channel that neither person is a member of, and they could
+  // never open a working DM again.
+  let id: number;
+  try {
+    id = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(channels)
+        .values({ type: 'dm', isPrivate: true, dmKey, createdBy: userIdA })
+        .$returningId();
+      await tx.insert(channelMembers).values([
+        { channelId: inserted.id, userId: userIdA },
+        { channelId: inserted.id, userId: userIdB },
+      ]);
+      return inserted.id;
+    });
+  } catch (err) {
+    // Two people opening the same DM at once: whoever lost the unique dm_key
+    // race adopts the winner's channel instead of failing.
+    const [raced] = await db.select().from(channels).where(eq(channels.dmKey, dmKey));
+    if (raced) return raced;
+    throw err;
+  }
+
   const [row] = await db.select().from(channels).where(eq(channels.id, id));
   return row;
 }

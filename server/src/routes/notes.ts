@@ -11,6 +11,7 @@ import {
   listNotes,
   updateNote,
 } from '../services/noteService.js';
+import { getVisibleProject } from '../services/projectService.js';
 
 export const notesRouter = Router();
 // requireAuth only ever authenticates user JWTs — no service-token scope exists
@@ -74,7 +75,14 @@ const convertBody = z.object({ projectId: z.number().int().positive() });
 
 notesRouter.post('/:id/convert-to-doc', validate(convertBody), async (req, res) => {
   const id = parseId(req.params.id);
-  const doc = await convertNoteToDoc(id, req.auth!.userId, (req.valid as z.infer<typeof convertBody>).projectId);
+  const { projectId } = req.valid as z.infer<typeof convertBody>;
+  // Visibility is checked here at the HTTP edge, exactly as projectsRouter and
+  // docsRouter do it. Without this, a note could be converted into a doc inside
+  // a project the author cannot see — which both bypasses project visibility and
+  // pushes personal note content somewhere its owner cannot follow it.
+  const project = await getVisibleProject(projectId, req.auth!.userId, req.auth!.role === 'admin');
+  if (!project) throw new AppError(404, 'not_found', 'Not found');
+  const doc = await convertNoteToDoc(id, req.auth!.userId, projectId);
   if (!doc) throw new AppError(404, 'not_found', 'Not found');
   res.status(201).json({ doc });
 });
