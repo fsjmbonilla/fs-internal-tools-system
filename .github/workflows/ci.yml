@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web — lint, typecheck, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # oxlint reads the whole repo, so this covers server sources too.
+      - run: npm run lint
+      # `npm run build` is tsc -b followed by vite build: typecheck and bundle.
+      - run: npm run build
+
+  server:
+    name: server — typecheck, tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: fs_internal_system_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_USER: root
+      DB_PASSWORD: ''
+      DB_NAME: fs_internal_system_test
+      JWT_SECRET: ci-only-not-a-real-secret
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      # The suite truncates tables but does not create them.
+      - name: Apply migrations
+        run: npm run db:migrate
+      - run: npm test
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Per the Express production security checklist. Runtime dependencies
+      # only, and high severity or worse — dev-tool advisories should not block a
+      # merge, and moderate findings in a transitive build dep would.
+      - name: Audit web dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit server dependencies
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: server
