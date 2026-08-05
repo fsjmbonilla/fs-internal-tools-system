@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAdmin, requireAuth } from '../middleware/auth.js';
+import { requireAdmin, requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import {
@@ -14,7 +14,8 @@ import {
 } from '../services/departmentService.js';
 
 export const departmentsRouter = Router();
-departmentsRouter.use(requireAuth);
+// User-only: departments are org structure, not part of the agent surface.
+departmentsRouter.use(requireAuth, requireUserAuth);
 
 function parseId(raw: string | string[]): number {
   const id = Number(raw);

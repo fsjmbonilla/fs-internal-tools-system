@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { Router } from 'express';
 import { db } from '../db/index.js';
 import { docs, messages, tasks } from '../db/schema/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { getAttachment, INLINEABLE } from '../services/attachmentService.js';
 import { getVisibleChannel } from '../services/channelService.js';
@@ -11,7 +11,9 @@ import { getVisibleProject } from '../services/projectService.js';
 import { getStorageDriver } from '../storage/index.js';
 
 export const filesRouter = Router();
-filesRouter.use(requireAuth);
+// User-only, matching uploadsRouter: a token cannot create attachments, so it has
+// no need to read them. (Note attachments have no branch below and 404 for everyone.)
+filesRouter.use(requireAuth, requireUserAuth);
 
 function parseId(raw: string | string[]): number {
   const id = Number(raw);

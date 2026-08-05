@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import {
@@ -17,7 +17,11 @@ export const notesRouter = Router();
 // requireAuth only ever authenticates user JWTs — no service-token scope exists
 // for notes, and none should be added later without deliberately revisiting
 // this decision. Notes are strictly personal and stay out of AI/automation reach.
-notesRouter.use(requireAuth);
+// Notes are strictly personal and stay out of AI/automation reach. That used to
+// rest on requireAuth only ever recognizing user JWTs; now that service tokens
+// exist, requireUserAuth enforces it structurally — a token is refused here
+// whatever scopes it holds, and there is deliberately no notes scope to grant.
+notesRouter.use(requireAuth, requireUserAuth);
 
 function parseId(raw: string | string[]): number {
   const id = Number(raw);

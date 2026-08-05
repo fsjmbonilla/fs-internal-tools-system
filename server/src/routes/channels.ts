@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { channelMembers, channels } from '../db/schema/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireScope, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { getActiveCallForChannel } from '../services/callService.js';
@@ -56,7 +56,7 @@ async function requireOwnerOrAdmin(channelId: number, userId: number, isAdmin: b
   if (row?.role !== 'owner') throw new AppError(404, 'not_found', 'Not found');
 }
 
-channelsRouter.get('/', async (req, res) => {
+channelsRouter.get('/', requireScope('chat:read'), async (req, res) => {
   const isAdmin = req.auth!.role === 'admin';
   const [list, unread] = await Promise.all([
     listVisibleChannels(req.auth!.userId, isAdmin),
@@ -96,7 +96,7 @@ async function resolveSupportBinding(
   return { projectId: input.projectId, intakeColumnId, instructions: input.instructions };
 }
 
-channelsRouter.post('/', validate(createBody), async (req, res) => {
+channelsRouter.post('/', requireUserAuth, /* creating a channel is org structure */ validate(createBody), async (req, res) => {
   const input = req.valid as z.infer<typeof createBody>;
   const isAdmin = req.auth!.role === 'admin';
   const { kind, supportConfig, ...channelInput } = input;
@@ -116,7 +116,7 @@ channelsRouter.post('/', validate(createBody), async (req, res) => {
   res.status(201).json({ channel });
 });
 
-channelsRouter.get('/:id', async (req, res) => {
+channelsRouter.get('/:id', requireScope('chat:read'), async (req, res) => {
   const id = parseId(req.params.id);
   const channel = await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
   res.json({ channel });
@@ -127,7 +127,7 @@ const patchBody = z.object({
   topic: z.string().max(255).nullable().optional(),
 });
 
-channelsRouter.patch('/:id', validate(patchBody), async (req, res) => {
+channelsRouter.patch('/:id', requireUserAuth, /* renaming/archiving is org structure */ validate(patchBody), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
   await requireVisibleChannel(id, req.auth!.userId, isAdmin);
@@ -139,7 +139,7 @@ channelsRouter.patch('/:id', validate(patchBody), async (req, res) => {
 
 const memberBody = z.object({ userId: z.number().int().positive() });
 
-channelsRouter.post('/:id/members', validate(memberBody), async (req, res) => {
+channelsRouter.post('/:id/members', requireUserAuth, /* membership decides visibility */ validate(memberBody), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
   await requireVisibleChannel(id, req.auth!.userId, isAdmin);
@@ -148,7 +148,7 @@ channelsRouter.post('/:id/members', validate(memberBody), async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-channelsRouter.delete('/:id/members/:userId', async (req, res) => {
+channelsRouter.delete('/:id/members/:userId', requireUserAuth, /* membership decides visibility */ async (req, res) => {
   const id = parseId(req.params.id);
   const memberId = parseId(req.params.userId);
   const isAdmin = req.auth!.role === 'admin';
@@ -163,7 +163,7 @@ const historyQuery = z.object({
   limit: z.coerce.number().int().positive().max(100).default(50),
 });
 
-channelsRouter.get('/:id/messages', validate(historyQuery, 'query'), async (req, res) => {
+channelsRouter.get('/:id/messages', requireScope('chat:read'), validate(historyQuery, 'query'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
   const { before, limit } = req.valid as z.infer<typeof historyQuery>;
@@ -176,7 +176,7 @@ const sendBody = z.object({
   attachmentIds: z.array(z.number().int().positive()).max(10).optional(),
 });
 
-channelsRouter.post('/:id/messages', validate(sendBody), async (req, res) => {
+channelsRouter.post('/:id/messages', requireScope('chat:write'), validate(sendBody), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
   await requireVisibleChannel(id, req.auth!.userId, isAdmin);
@@ -190,21 +190,21 @@ channelsRouter.post('/:id/messages', validate(sendBody), async (req, res) => {
 
 const readBody = z.object({ messageId: z.number().int().positive() });
 
-channelsRouter.post('/:id/read', validate(readBody), async (req, res) => {
+channelsRouter.post('/:id/read', requireUserAuth, /* read state belongs to a person */ validate(readBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
   await markRead(id, req.auth!.userId, (req.valid as z.infer<typeof readBody>).messageId);
   res.json({ ok: true });
 });
 
-channelsRouter.get('/:id/call', async (req, res) => {
+channelsRouter.get('/:id/call', requireUserAuth, /* a LiveKit join grant is not for a token */ async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
   const call = await getActiveCallForChannel(id);
   res.json({ call });
 });
 
-channelsRouter.get('/:id/support-config', async (req, res) => {
+channelsRouter.get('/:id/support-config', requireUserAuth, /* a token must not read its own triage config */ async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
   await requireVisibleChannel(id, req.auth!.userId, isAdmin);
@@ -229,7 +229,7 @@ const supportConfigPut = z.object({
   aiEnabled: z.boolean().optional(),
 });
 
-channelsRouter.put('/:id/support-config', validate(supportConfigPut), async (req, res) => {
+channelsRouter.put('/:id/support-config', requireUserAuth, /* a token editing its own triage config is self-escalation */ validate(supportConfigPut), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
   await requireVisibleChannel(id, req.auth!.userId, isAdmin);
@@ -255,14 +255,14 @@ messagesRouter.use(requireAuth);
 
 const editBody = z.object({ body: z.string().min(1).max(4000) });
 
-messagesRouter.patch('/:id', validate(editBody), async (req, res) => {
+messagesRouter.patch('/:id', requireScope('chat:write'), validate(editBody), async (req, res) => {
   const id = parseId(req.params.id);
   const ok = await editMessage(id, req.auth!.userId, (req.valid as z.infer<typeof editBody>).body);
   if (!ok) throw new AppError(403, 'forbidden', 'Only the author can edit this message');
   res.json({ ok: true });
 });
 
-messagesRouter.delete('/:id', async (req, res) => {
+messagesRouter.delete('/:id', requireScope('chat:write'), async (req, res) => {
   const id = parseId(req.params.id);
   const ok = await softDeleteMessage(id, req.auth!.userId);
   if (!ok) throw new AppError(403, 'forbidden', 'Only the author can delete this message');
@@ -271,7 +271,7 @@ messagesRouter.delete('/:id', async (req, res) => {
 
 const reactionBody = z.object({ emoji: z.string().min(1).max(32) });
 
-messagesRouter.put('/:id/reactions', validate(reactionBody), async (req, res) => {
+messagesRouter.put('/:id/reactions', requireUserAuth, /* default-deny; no scope covers reacting */ validate(reactionBody), async (req, res) => {
   const id = parseId(req.params.id);
   const result = await toggleReaction(
     id,
@@ -289,7 +289,7 @@ const searchQuery = z.object({
   channelId: z.coerce.number().int().positive().optional(),
 });
 
-searchRouter.get('/messages', validate(searchQuery, 'query'), async (req, res) => {
+searchRouter.get('/messages', requireScope('chat:read'), validate(searchQuery, 'query'), async (req, res) => {
   const { q, channelId } = req.valid as z.infer<typeof searchQuery>;
   const results = await searchMessages(req.auth!.userId, req.auth!.role === 'admin', q, channelId);
   res.json({ messages: results });

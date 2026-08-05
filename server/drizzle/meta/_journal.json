@@ -78,6 +78,13 @@
       "when": 1785934563191,
       "tag": "0010_note_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1785935844126,
+      "tag": "0011_api_tokens",
+      "breakpoints": true
     }
   ]
 }

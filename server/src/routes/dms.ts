@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireScope } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { findOrCreateDm, listMyDms } from '../services/channelService.js';
@@ -12,7 +12,7 @@ import { getUnreadCounts } from '../services/messageService.js';
 export const dmsRouter = Router();
 dmsRouter.use(requireAuth);
 
-dmsRouter.get('/', async (req, res) => {
+dmsRouter.get('/', requireScope('chat:read'), async (req, res) => {
   // Unread comes from the same single query the channel list uses; DMs are
   // channels, so they were already counted — just never exposed here.
   const [dms, unread] = await Promise.all([
@@ -24,7 +24,7 @@ dmsRouter.get('/', async (req, res) => {
 
 const dmBody = z.object({ userId: z.number().int().positive() });
 
-dmsRouter.post('/', validate(dmBody), async (req, res) => {
+dmsRouter.post('/', requireScope('chat:write'), validate(dmBody), async (req, res) => {
   const { userId } = req.valid as z.infer<typeof dmBody>;
   const me = req.auth!.userId;
   if (userId === me) {

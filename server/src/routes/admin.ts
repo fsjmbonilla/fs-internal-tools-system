@@ -3,16 +3,28 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
-import { requireAdmin, requireAuth } from '../middleware/auth.js';
+import { requireAdmin, requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { events } from '../services/events.js';
+import {
+  createApiToken,
+  isScope,
+  listApiTokens,
+  revokeApiToken,
+  SCOPES,
+  type Scope,
+} from '../services/apiTokenService.js';
 import { countNotes, transferNotes } from '../services/noteService.js';
 import { getAllowedDomains, setAllowedDomains } from '../services/settingsService.js';
 
 export const adminRouter = Router();
-adminRouter.use(requireAuth, requireAdmin);
+// User-only, deliberately. Two reasons: administering the org is not something an
+// agent should do on its own credential, and this router exposes the note
+// transfer/count endpoints — so notes stay out of automation reach here too, not
+// only on notesRouter.
+adminRouter.use(requireAuth, requireUserAuth, requireAdmin);
 
 adminRouter.get('/settings/allowed-domains', async (_req, res) => {
   res.json({ domains: await getAllowedDomains() });
@@ -39,6 +51,7 @@ adminRouter.get('/users', async (_req, res) => {
       displayName: users.displayName,
       role: users.role,
       isActive: users.isActive,
+      isBot: users.isBot,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -122,5 +135,71 @@ adminRouter.patch('/users/:id', validate(userPatch), async (req, res) => {
     events.emit('access.userSessionsInvalidated', { userId: id, reason: 'role_changed' });
   }
 
+  res.json({ ok: true });
+});
+
+/**
+ * Service tokens.
+ *
+ * Admin-only and user-only (see the router guard above): a token cannot be used
+ * to mint another token, so a leaked token cannot widen its own reach or outlive
+ * its revocation.
+ */
+
+/** The vocabulary, so the console does not hardcode a list that can drift. */
+adminRouter.get('/tokens/scopes', (_req, res) => {
+  res.json({ scopes: SCOPES });
+});
+
+adminRouter.get('/tokens', async (_req, res) => {
+  res.json({ tokens: await listApiTokens() });
+});
+
+const tokenBody = z.object({
+  name: z.string().min(1).max(120),
+  scopes: z
+    .array(z.string())
+    .min(1)
+    .max(SCOPES.length)
+    .refine((list) => list.every(isScope), { message: 'unknown scope' })
+    .refine((list) => new Set(list).size === list.length, { message: 'duplicate scope' }),
+  actsAsUserId: z.number().int().positive(),
+  // Optional, but an expiry is the cheapest way to bound a leak. The console
+  // suggests one; the API does not force it, because a long-lived integration is
+  // a legitimate thing to run.
+  expiresAt: z.coerce.date().optional(),
+});
+
+adminRouter.post('/tokens', validate(tokenBody), async (req, res) => {
+  const body = req.valid as z.infer<typeof tokenBody>;
+  if (body.expiresAt && body.expiresAt.getTime() <= Date.now()) {
+    throw new AppError(400, 'validation_error', 'Expiry must be in the future');
+  }
+  const { id, token } = await createApiToken({
+    name: body.name,
+    scopes: body.scopes as Scope[],
+    actsAsUserId: body.actsAsUserId,
+    createdBy: req.auth!.userId,
+    expiresAt: body.expiresAt ?? null,
+  });
+  // Logged without the token itself — the point of the record is who minted what.
+  logger.info(
+    { actor: req.auth!.userId, tokenId: id, actsAs: body.actsAsUserId, scopes: body.scopes },
+    'service token created',
+  );
+  // The only time the plaintext exists outside the caller's memory. 201 with the
+  // secret in the body, and no endpoint that can show it again.
+  res.status(201).json({ id, token });
+});
+
+adminRouter.delete('/tokens/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new AppError(400, 'validation_error', 'Bad token id');
+  }
+  // False means "no such live token" — already revoked reads the same as never
+  // existed, which is the honest answer to "is this token usable?".
+  if (!(await revokeApiToken(id))) throw new AppError(404, 'not_found', 'Not found');
+  logger.info({ actor: req.auth!.userId, tokenId: id }, 'service token revoked');
   res.json({ ok: true });
 });

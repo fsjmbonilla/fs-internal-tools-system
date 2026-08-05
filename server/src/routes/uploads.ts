@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { uploadLimiter } from '../middleware/rateLimit.js';
 import {
   createUnlinkedAttachment,
@@ -9,7 +9,10 @@ import {
 } from '../services/attachmentService.js';
 
 export const uploadsRouter = Router();
-uploadsRouter.use(requireAuth);
+// User-only for now. No scope describes "upload a file", and the MCP tool surface
+// does not include attachments — so the honest gate is "people only" rather than a
+// scope invented to cover it. Relax deliberately if agents ever need to attach.
+uploadsRouter.use(requireAuth, requireUserAuth);
 
 const MAX_FILES = 10;
 

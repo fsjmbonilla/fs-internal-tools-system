@@ -1,9 +1,11 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from '../config.js';
+import { resetTokenTouchState } from '../services/apiTokenService.js';
 import { pool } from './index.js';
 
 const TABLES = [
+  'api_tokens',
   'refresh_tokens',
   'department_members',
   'departments',
@@ -40,4 +42,6 @@ export async function resetDb(): Promise<void> {
   for (const t of TABLES) await pool.query(`TRUNCATE TABLE \`${t}\``);
   await pool.query('SET FOREIGN_KEY_CHECKS = 1');
   await rm(join(config.UPLOAD_DIR, 'uploads'), { recursive: true, force: true });
+  // In-memory state that outlives a truncation, so it has to be reset with it.
+  resetTokenTouchState();
 }

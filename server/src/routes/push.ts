@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { registerDeviceToken, unregisterDeviceToken } from '../services/deviceTokenService.js';
 
 export const pushRouter = Router();
-pushRouter.use(requireAuth);
+// User-only: a push subscription belongs to a person's device.
+pushRouter.use(requireAuth, requireUserAuth);
 
 const registerBody = z.object({
   token: z.string().min(10).max(255),

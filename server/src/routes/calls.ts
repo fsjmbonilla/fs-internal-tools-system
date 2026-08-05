@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { endCall, getCallById, startCall } from '../services/callService.js';
@@ -13,7 +13,9 @@ import { getVisibleChannel, isChannelMember } from '../services/channelService.j
 import { isLiveKitConfigured, mintCallToken } from '../services/livekitService.js';
 
 export const callsRouter = Router();
-callsRouter.use(requireAuth);
+// User-only: a bot joining a video call is not a feature yet, and a LiveKit join
+// grant is a credential worth not minting for a long-lived token.
+callsRouter.use(requireAuth, requireUserAuth);
 
 function parseId(raw: string | string[]): number {
   const id = Number(raw);

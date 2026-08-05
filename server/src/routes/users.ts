@@ -3,13 +3,16 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { toPublicUser } from '../services/authService.js';
 
 export const usersRouter = Router();
 usersRouter.use(requireAuth);
 
+// Left reachable by service tokens on purpose: resolving an id to a name is needed
+// to render any ticket or message an agent reads, and this returns the same
+// directory every authenticated user already sees.
 usersRouter.get('/', async (_req, res) => {
   const rows = await db
     .select()
@@ -24,7 +27,7 @@ const mePatch = z.object({
   avatarUrl: z.url().max(500).nullable().optional(),
 });
 
-usersRouter.patch('/me', validate(mePatch), async (req, res) => {
+usersRouter.patch('/me', requireUserAuth, validate(mePatch), async (req, res) => {
   const patch = req.valid as z.infer<typeof mePatch>;
   await db.update(users).set(patch).where(eq(users.id, req.auth!.userId));
   const [row] = await db.select().from(users).where(eq(users.id, req.auth!.userId));

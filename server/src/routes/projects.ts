@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { tasks as tasksTable } from '../db/schema/index.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireScope, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import {
@@ -70,7 +70,7 @@ async function requireProjectMember(projectId: number, userId: number, isAdmin: 
   return project;
 }
 
-projectsRouter.get('/', async (req, res) => {
+projectsRouter.get('/', requireScope('tickets:read'), async (req, res) => {
   const isAdmin = req.auth!.role === 'admin';
   const [projects, mine] = await Promise.all([
     listVisibleProjects(req.auth!.userId, isAdmin),
@@ -90,14 +90,14 @@ const createBody = z.object({
   departmentId: z.number().int().positive().optional(),
 });
 
-projectsRouter.post('/', validate(createBody), async (req, res) => {
+projectsRouter.post('/', requireUserAuth, /* creating a project is org structure */ validate(createBody), async (req, res) => {
   const input = req.valid as z.infer<typeof createBody>;
   const project = await createProject({ ...input, createdBy: req.auth!.userId });
   await createDefaultColumns(project.id);
   res.status(201).json({ project });
 });
 
-projectsRouter.get('/:id', async (req, res) => {
+projectsRouter.get('/:id', requireScope('tickets:read'), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
   const project = await requireVisibleProject(id, req.auth!.userId, isAdmin);
@@ -110,7 +110,7 @@ const patchBody = z.object({
   description: z.string().max(2000).nullable().optional(),
 });
 
-projectsRouter.patch('/:id', validate(patchBody), async (req, res) => {
+projectsRouter.patch('/:id', requireUserAuth, /* renaming/archiving is org structure */ validate(patchBody), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
   await requireProjectMember(id, req.auth!.userId, isAdmin);
@@ -121,21 +121,21 @@ projectsRouter.patch('/:id', validate(patchBody), async (req, res) => {
 
 const memberBody = z.object({ userId: z.number().int().positive() });
 
-projectsRouter.post('/:id/members', validate(memberBody), async (req, res) => {
+projectsRouter.post('/:id/members', requireUserAuth, /* membership decides visibility */ validate(memberBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await addProjectMember(id, (req.valid as z.infer<typeof memberBody>).userId);
   res.status(201).json({ ok: true });
 });
 
-projectsRouter.delete('/:id/members/:userId', async (req, res) => {
+projectsRouter.delete('/:id/members/:userId', requireUserAuth, /* membership decides visibility */ async (req, res) => {
   const id = parseId(req.params.id);
   await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await removeProjectMember(id, parseId(req.params.userId));
   res.json({ ok: true });
 });
 
-projectsRouter.get('/:id/board', async (req, res) => {
+projectsRouter.get('/:id/board', requireScope('tickets:read'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleProject(id, req.auth!.userId, req.auth!.role === 'admin');
   res.json(await getBoard(id));
@@ -150,7 +150,7 @@ const taskBody = z.object({
   attachmentIds: z.array(z.number().int().positive()).max(10).optional(),
 });
 
-projectsRouter.post('/:id/tasks', validate(taskBody), async (req, res) => {
+projectsRouter.post('/:id/tasks', requireScope('tickets:write'), validate(taskBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const input = req.valid as z.infer<typeof taskBody>;
@@ -164,7 +164,7 @@ const docBody = z.object({
   attachmentIds: z.array(z.number().int().positive()).max(10).optional(),
 });
 
-projectsRouter.post('/:id/docs', validate(docBody), async (req, res) => {
+projectsRouter.post('/:id/docs', requireScope('docs:write'), validate(docBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireProjectMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const input = req.valid as z.infer<typeof docBody>;
@@ -172,7 +172,7 @@ projectsRouter.post('/:id/docs', validate(docBody), async (req, res) => {
   res.status(201).json({ doc });
 });
 
-projectsRouter.get('/:id/docs', async (req, res) => {
+projectsRouter.get('/:id/docs', requireScope('docs:read'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleProject(id, req.auth!.userId, req.auth!.role === 'admin');
   res.json({ docs: await listDocs(id) });
@@ -196,7 +196,7 @@ async function requireDocMember(docId: number, userId: number, isAdmin: boolean)
   return doc;
 }
 
-docsRouter.get('/:id', async (req, res) => {
+docsRouter.get('/:id', requireScope('docs:read'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleDoc(id, req.auth!.userId, req.auth!.role === 'admin');
   res.json({ doc: await getDocWithAttachments(id) });
@@ -207,14 +207,14 @@ const docPatch = z.object({
   content: z.string().max(200000).optional(),
 });
 
-docsRouter.patch('/:id', validate(docPatch), async (req, res) => {
+docsRouter.patch('/:id', requireScope('docs:write'), validate(docPatch), async (req, res) => {
   const id = parseId(req.params.id);
   await requireDocMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await updateDoc(id, req.valid as z.infer<typeof docPatch>, req.auth!.userId);
   res.json({ doc: await getDocWithAttachments(id) });
 });
 
-docsRouter.delete('/:id', async (req, res) => {
+docsRouter.delete('/:id', requireScope('docs:write'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireDocMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await deleteDoc(id);
@@ -223,7 +223,7 @@ docsRouter.delete('/:id', async (req, res) => {
 
 const docAttachBody = z.object({ attachmentIds: z.array(z.number().int().positive()).min(1).max(10) });
 
-docsRouter.post('/:id/attachments', validate(docAttachBody), async (req, res) => {
+docsRouter.post('/:id/attachments', requireUserAuth, /* attachments are user-only, see uploadsRouter */ validate(docAttachBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireDocMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const ok = await addDocAttachments(id, req.auth!.userId, (req.valid as z.infer<typeof docAttachBody>).attachmentIds);
@@ -258,13 +258,13 @@ const taskPatch = z.object({
   dueDate: z.string().date().nullable().optional(),
 });
 
-tasksRouter.get('/:id', async (req, res) => {
+tasksRouter.get('/:id', requireScope('tickets:read'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
   res.json({ task: await getTaskById(id) });
 });
 
-tasksRouter.patch('/:id', validate(taskPatch), async (req, res) => {
+tasksRouter.patch('/:id', requireScope('tickets:write'), validate(taskPatch), async (req, res) => {
   const id = parseId(req.params.id);
   await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const task = await updateTask(id, req.valid as z.infer<typeof taskPatch>);
@@ -273,7 +273,7 @@ tasksRouter.patch('/:id', validate(taskPatch), async (req, res) => {
 
 const taskAttachBody = z.object({ attachmentIds: z.array(z.number().int().positive()).min(1).max(10) });
 
-tasksRouter.post('/:id/attachments', validate(taskAttachBody), async (req, res) => {
+tasksRouter.post('/:id/attachments', requireUserAuth, /* attachments are user-only, see uploadsRouter */ validate(taskAttachBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const ok = await addTaskAttachments(
@@ -285,7 +285,7 @@ tasksRouter.post('/:id/attachments', validate(taskAttachBody), async (req, res) 
   res.status(201).json({ task: await getTaskById(id) });
 });
 
-tasksRouter.delete('/:id', async (req, res) => {
+tasksRouter.delete('/:id', requireScope('tickets:write'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   await deleteTask(id);
@@ -298,7 +298,7 @@ const moveBody = z.object({
   afterTaskId: z.number().int().positive().optional(),
 });
 
-tasksRouter.post('/:id/move', validate(moveBody), async (req, res) => {
+tasksRouter.post('/:id/move', requireScope('tickets:write'), validate(moveBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const { columnId, beforeTaskId, afterTaskId } = req.valid as z.infer<typeof moveBody>;
@@ -308,14 +308,14 @@ tasksRouter.post('/:id/move', validate(moveBody), async (req, res) => {
 
 const commentBody = z.object({ body: z.string().min(1).max(4000) });
 
-tasksRouter.post('/:id/comments', validate(commentBody), async (req, res) => {
+tasksRouter.post('/:id/comments', requireScope('tickets:write'), validate(commentBody), async (req, res) => {
   const id = parseId(req.params.id);
   await requireTaskMember(id, req.auth!.userId, req.auth!.role === 'admin');
   const comment = await addComment(id, req.auth!.userId, (req.valid as z.infer<typeof commentBody>).body);
   res.status(201).json({ comment });
 });
 
-tasksRouter.get('/:id/comments', async (req, res) => {
+tasksRouter.get('/:id/comments', requireScope('tickets:read'), async (req, res) => {
   const id = parseId(req.params.id);
   await requireVisibleTask(id, req.auth!.userId, req.auth!.role === 'admin');
   res.json({ comments: await listComments(id) });
