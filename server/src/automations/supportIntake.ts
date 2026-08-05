@@ -11,6 +11,10 @@ const CONTEXT_MESSAGES = 20;
 
 // One pending timer per channel: a burst of rapid messages collapses into a single AI turn.
 const pending = new Map<number, NodeJS.Timeout>();
+// A triage takes seconds. The debounce coalesces messages *before* a call starts,
+// but a message arriving mid-call used to start a second overlapping triage on the
+// same channel — two tickets for one problem, and double the spend.
+const inFlight = new Set<number>();
 
 export function registerSupportIntake(): void {
   events.on('message.created', (payload: MessageCreatedEvent) => {
@@ -25,9 +29,16 @@ export function registerSupportIntake(): void {
       channelId,
       setTimeout(() => {
         pending.delete(channelId);
-        handleSupportMessage(payload).catch((err) => {
-          logger.error({ err }, 'supportIntake failed');
-        });
+        if (inFlight.has(channelId)) {
+          logger.debug({ channelId }, 'supportIntake: triage already running, skipping');
+          return;
+        }
+        inFlight.add(channelId);
+        handleSupportMessage(payload)
+          .catch((err) => {
+            logger.error({ err }, 'supportIntake failed');
+          })
+          .finally(() => inFlight.delete(channelId));
       }, config.SUPPORT_DEBOUNCE_MS),
     );
   });
@@ -39,6 +50,10 @@ async function handleSupportMessage(payload: MessageCreatedEvent): Promise<void>
   if (!supportConfig || !supportConfig.aiEnabled) return;
 
   const botUserId = await getBotUserId();
+  // Belt-and-braces against the bot answering itself: payload.message.isBot is the
+  // primary guard, but it depends on users.is_bot being true, which a manual
+  // UPDATE or a pre-existing account at that address could silently undo.
+  if (botUserId !== null && payload.message.userId === botUserId) return;
   if (botUserId === null) {
     logger.warn('supportIntake: no bot user seeded — run `npm run seed:bot`');
     return;

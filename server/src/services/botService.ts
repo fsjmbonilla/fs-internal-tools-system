@@ -14,7 +14,14 @@ export async function getBotUserId(): Promise<number | null> {
 
 export async function ensureBotUser(): Promise<number> {
   const existing = await getBotUserId();
-  if (existing !== null) return existing;
+  if (existing !== null) {
+    // Repair rather than assume. is_bot is the loop guard that stops the
+    // assistant answering itself, and get-or-create left it however it was found
+    // — a pre-existing account at this address, or one manual UPDATE, disabled
+    // the guard silently.
+    await db.update(users).set({ isBot: true, isActive: true }).where(eq(users.id, existing));
+    return existing;
+  }
   // The bot never logs in; hash a throwaway random secret so no usable password exists.
   const passwordHash = await hashPassword(randomBytes(32).toString('hex'));
   const [{ id }] = await db

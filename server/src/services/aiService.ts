@@ -76,9 +76,12 @@ export async function triageSupportConversation(input: {
   if (!openai) return null;
 
   const system = input.instructions ? `${BASE_PROMPT}\n\nExtra guidance: ${input.instructions}` : BASE_PROMPT;
+  // A pasted log or stack trace would otherwise send tens of thousands of tokens
+  // per triage. Enough of each message survives to triage it.
+  const MAX_BODY_CHARS = 2000;
   const transcript = input.messages
     .slice(-MAX_CONTEXT_MESSAGES)
-    .map((m) => `${m.displayName}: ${m.body}`)
+    .map((m) => `${m.displayName}: ${m.body.slice(0, MAX_BODY_CHARS)}`)
     .join('\n');
 
   try {

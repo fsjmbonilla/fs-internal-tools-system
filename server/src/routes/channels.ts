@@ -206,8 +206,20 @@ channelsRouter.get('/:id/call', async (req, res) => {
 
 channelsRouter.get('/:id/support-config', async (req, res) => {
   const id = parseId(req.params.id);
-  await requireVisibleChannel(id, req.auth!.userId, req.auth!.role === 'admin');
-  res.json({ supportConfig: await getSupportConfig(id) });
+  const isAdmin = req.auth!.role === 'admin';
+  await requireVisibleChannel(id, req.auth!.userId, isAdmin);
+  const supportConfig = await getSupportConfig(id);
+
+  // The config names a project, so returning it to anyone who can see the channel
+  // exposed private projects: a public support channel bound to a private project
+  // told the whole company that project exists, which is exactly what the create
+  // path takes care to prevent. The channel itself is legitimately visible, so
+  // this withholds the binding rather than 404-ing the channel.
+  if (supportConfig && !(await getVisibleProject(supportConfig.projectId, req.auth!.userId, isAdmin))) {
+    res.json({ supportConfig: null });
+    return;
+  }
+  res.json({ supportConfig });
 });
 
 const supportConfigPut = z.object({
