@@ -18,6 +18,7 @@ export const channels = mysqlTable('channels', {
   id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
   name: varchar('name', { length: 80 }),
   type: mysqlEnum('type', ['public', 'private', 'dm']).notNull().default('public'),
+  kind: mysqlEnum('kind', ['standard', 'support']).notNull().default('standard'),
   isPrivate: boolean('is_private').notNull().default(false),
   topic: varchar('topic', { length: 255 }),
   dmKey: varchar('dm_key', { length: 50 }).unique(),

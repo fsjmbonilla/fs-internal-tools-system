@@ -14,6 +14,8 @@ export interface TaskCardData {
   title: string;
   assigneeId: number | null;
   dueDate: string | null;
+  originChannelId: number | null;
+  priority: 'low' | 'medium' | 'high' | 'urgent' | null;
 }
 
 export function TaskCard({ task, onOpen }: { task: TaskCardData; onOpen: (id: number) => void }) {
@@ -58,6 +60,26 @@ export function TaskCard({ task, onOpen }: { task: TaskCardData; onOpen: (id: nu
     >
       {closestEdge === 'top' && <div className="absolute inset-x-0 -top-1 h-0.5 bg-primary" />}
       {task.title}
+      {(task.priority || task.originChannelId) && (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {task.priority && (
+            <span
+              className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
+                task.priority === 'urgent' || task.priority === 'high'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {task.priority}
+            </span>
+          )}
+          {task.originChannelId && (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              from chat
+            </span>
+          )}
+        </div>
+      )}
       {task.dueDate && <div className="mt-1 text-xs text-muted-foreground">{task.dueDate}</div>}
       {closestEdge === 'bottom' && <div className="absolute inset-x-0 -bottom-1 h-0.5 bg-primary" />}
     </button>

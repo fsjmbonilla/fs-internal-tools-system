@@ -158,4 +158,89 @@ describe('channel routes', () => {
       .set('Authorization', `Bearer ${outsider.token}`);
     expect(res.status).toBe(404);
   });
+
+  it('creates a support channel bound to a project and exposes its config', async () => {
+    const owner = await makeUser(app, { email: 'supowner@flowerstore.ph' });
+    const project = await request(app)
+      .post('/api/projects')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ name: 'Support Proj', isPrivate: false });
+
+    const res = await request(app)
+      .post('/api/channels')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({
+        name: 'helpdesk',
+        isPrivate: false,
+        kind: 'support',
+        supportConfig: { projectId: project.body.project.id, instructions: 'Ask for the branch.' },
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.channel.kind).toBe('support');
+
+    const cfg = await request(app)
+      .get(`/api/channels/${res.body.channel.id}/support-config`)
+      .set('Authorization', `Bearer ${owner.token}`);
+    expect(cfg.status).toBe(200);
+    expect(cfg.body.supportConfig.projectId).toBe(project.body.project.id);
+    expect(cfg.body.supportConfig.instructions).toBe('Ask for the branch.');
+    expect(cfg.body.supportConfig.intakeColumnId).toBeGreaterThan(0);
+  });
+
+  it('404s when binding a support channel to a project the caller cannot see', async () => {
+    const owner = await makeUser(app, { email: 'supowner2@flowerstore.ph' });
+    const outsider = await makeUser(app, { email: 'supoutsider@flowerstore.ph' });
+    const project = await request(app)
+      .post('/api/projects')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ name: 'Secret Proj', isPrivate: true });
+
+    const res = await request(app)
+      .post('/api/channels')
+      .set('Authorization', `Bearer ${outsider.token}`)
+      .send({
+        name: 'sneaky',
+        isPrivate: false,
+        kind: 'support',
+        supportConfig: { projectId: project.body.project.id },
+      });
+    expect(res.status).toBe(404);
+  });
+
+  it('PUT support-config toggles ai_enabled for the channel owner', async () => {
+    const owner = await makeUser(app, { email: 'supowner3@flowerstore.ph' });
+    const project = await request(app)
+      .post('/api/projects')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ name: 'Proj3', isPrivate: false });
+    const channel = await request(app)
+      .post('/api/channels')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({
+        name: 'helpdesk3',
+        isPrivate: false,
+        kind: 'support',
+        supportConfig: { projectId: project.body.project.id },
+      });
+
+    const res = await request(app)
+      .put(`/api/channels/${channel.body.channel.id}/support-config`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ projectId: project.body.project.id, aiEnabled: false });
+    expect(res.status).toBe(200);
+    expect(res.body.supportConfig.aiEnabled).toBe(false);
+  });
+
+  it('GET support-config returns null for a standard channel', async () => {
+    const owner = await makeUser(app, { email: 'supowner4@flowerstore.ph' });
+    const channel = await request(app)
+      .post('/api/channels')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ name: 'plain', isPrivate: false });
+    const res = await request(app)
+      .get(`/api/channels/${channel.body.channel.id}/support-config`)
+      .set('Authorization', `Bearer ${owner.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.supportConfig).toBeNull();
+  });
 });

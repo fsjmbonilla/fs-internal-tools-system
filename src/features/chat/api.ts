@@ -12,6 +12,22 @@ export const createChannel = (input: {
 
 export const getChannel = (id: number) => api<{ channel: Channel }>(`/api/channels/${id}`);
 
+export const createSupportChannel = (input: {
+  name: string;
+  isPrivate: boolean;
+  projectId: number;
+  instructions?: string;
+}) =>
+  api<{ channel: Channel }>('/api/channels', {
+    method: 'POST',
+    body: {
+      name: input.name,
+      isPrivate: input.isPrivate,
+      kind: 'support',
+      supportConfig: { projectId: input.projectId, instructions: input.instructions },
+    },
+  });
+
 export const getMessages = (channelId: number, before?: number, limit = 50) => {
   const params = new URLSearchParams({ limit: String(limit) });
   if (before) params.set('before', String(before));

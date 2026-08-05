@@ -9,8 +9,14 @@ export interface MessageCreatedEvent {
     displayName: string;
     body: string;
     mentionedUserIds: number[];
+    isBot: boolean;
   };
-  channel: { id: number; type: 'public' | 'private' | 'dm'; isPrivate: boolean };
+  channel: {
+    id: number;
+    type: 'public' | 'private' | 'dm';
+    kind: 'standard' | 'support';
+    isPrivate: boolean;
+  };
 }
 
 /**

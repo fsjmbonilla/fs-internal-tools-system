@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { logoutUser } from '@/features/auth/api';
@@ -6,6 +7,7 @@ import { useAuthStore } from '@/features/auth/authStore';
 import { api } from '@/lib/api';
 import { listChannels, listMyDms, type DmSummary } from './api';
 import { NewChannelDialog } from './NewChannelDialog';
+import { NewSupportChannelDialog } from './NewSupportChannelDialog';
 import type { Channel } from './types';
 
 interface Department {
@@ -17,7 +19,8 @@ export function Sidebar() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { channelId } = useParams();
-  const { data: channelData } = useQuery({
+  const [supportOpen, setSupportOpen] = useState(false);
+  const { data: channelData, refetch: refetchChannels } = useQuery({
     queryKey: ['channels'],
     queryFn: listChannels,
     refetchInterval: 15_000,
@@ -51,7 +54,21 @@ export function Sidebar() {
         <Link to="/notes" className="mb-4 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
           Notes
         </Link>
-        <SidebarSection title="Channels" action={<NewChannelDialog departments={departments} />}>
+        <SidebarSection
+          title="Channels"
+          action={
+            <span className="flex items-center gap-2">
+              <button
+                type="button"
+                className="text-xs text-white/60 hover:text-white"
+                onClick={() => setSupportOpen(true)}
+              >
+                + Support
+              </button>
+              <NewChannelDialog departments={departments} />
+            </span>
+          }
+        >
           {orgWide.map((c) => (
             <ChannelLink key={c.id} channel={c} active={String(c.id) === channelId} />
           ))}
@@ -99,6 +116,11 @@ export function Sidebar() {
           Sign out
         </button>
       </div>
+      <NewSupportChannelDialog
+        open={supportOpen}
+        onOpenChange={setSupportOpen}
+        onCreated={() => refetchChannels()}
+      />
     </aside>
   );
 }

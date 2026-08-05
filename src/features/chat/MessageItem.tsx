@@ -19,6 +19,11 @@ export function MessageItem({
       <div className="flex-1">
         <div className="flex items-baseline gap-2">
           <span className="font-semibold">{message.displayName}</span>
+          {message.isBot && (
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+              Bot
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">
             {new Date(message.createdAt).toLocaleTimeString([], {
               hour: '2-digit',
