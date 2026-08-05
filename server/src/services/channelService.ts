@@ -185,3 +185,11 @@ export async function listMyDms(userId: number): Promise<DmSummary[]> {
     };
   });
 }
+
+export async function getOtherDmMember(channelId: number, excludeUserId: number): Promise<number | null> {
+  const [row] = await db
+    .select({ userId: channelMembers.userId })
+    .from(channelMembers)
+    .where(and(eq(channelMembers.channelId, channelId), sql`${channelMembers.userId} <> ${excludeUserId}`));
+  return row?.userId ?? null;
+}

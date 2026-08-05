@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
@@ -32,6 +32,11 @@ const NotesPage = lazy(() =>
 const AdminPage = lazy(() =>
   import('@/features/admin/AdminPage').then((m) => ({ default: m.AdminPage })),
 );
+// The heaviest chunk in the app — livekit-client ships a whole WebRTC stack, and
+// it is only needed once someone is actually in a call.
+const CallPage = lazy(() =>
+  import('@/features/calls/CallPage').then((m) => ({ default: m.CallPage })),
+);
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -39,6 +44,20 @@ export const router = createBrowserRouter([
   {
     element: <RequireAuth />,
     children: [
+      {
+        path: '/call/:roomName',
+        element: (
+          <Suspense
+            fallback={
+              <div className="flex h-dvh items-center justify-center text-muted-foreground">
+                Joining call…
+              </div>
+            }
+          >
+            <CallPage />
+          </Suspense>
+        ),
+      },
       {
         element: <AppLayout />,
         children: [

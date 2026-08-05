@@ -7,6 +7,7 @@ import {
   addChannelMember,
   createChannel,
   findOrCreateDm,
+  getOtherDmMember,
   getVisibleChannel,
   isChannelMember,
   listVisibleChannels,
@@ -80,6 +81,14 @@ describe('channelService', () => {
       .from(channelMembers)
       .where(eq(channelMembers.channelId, dm1.id));
     expect(rows.map((r) => r.userId).sort((x, y) => x - y)).toEqual([a, b].sort((x, y) => x - y));
+  });
+
+  it('getOtherDmMember returns the other participant, excluding the given user', async () => {
+    const a = await seedUser('a@flowerstore.ph');
+    const b = await seedUser('b@flowerstore.ph');
+    const dm = await findOrCreateDm(a, b);
+    expect(await getOtherDmMember(dm.id, a)).toBe(b);
+    expect(await getOtherDmMember(dm.id, b)).toBe(a);
   });
 
   it('member add/remove works', async () => {

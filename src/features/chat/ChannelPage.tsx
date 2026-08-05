@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { useAuthStore } from '@/features/auth/authStore';
+import { CallBanner } from '@/features/calls/CallBanner';
+import { useActiveCall } from '@/features/calls/useActiveCall';
 import { joinChannel, leaveChannel, onTyping } from '@/lib/socket';
 import { getChannel } from './api';
 import { MessageInput } from './MessageInput';
@@ -18,6 +20,7 @@ export function ChannelPage() {
     enabled: Number.isFinite(id),
   });
   const [typingUsers, setTypingUsers] = useState<Record<number, string>>({});
+  const activeCall = useActiveCall(id);
 
   useEffect(() => {
     if (!Number.isFinite(id)) return;
@@ -45,6 +48,7 @@ export function ChannelPage() {
         <h2 className="font-semibold"># {data?.channel.name ?? '…'}</h2>
         {data?.channel.topic && <p className="text-xs text-muted-foreground">{data.channel.topic}</p>}
       </header>
+      <CallBanner channelId={id} activeCall={activeCall} />
       <div className="min-h-0 flex-1">
         <MessageList channelId={id} />
       </div>
