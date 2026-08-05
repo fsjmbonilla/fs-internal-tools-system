@@ -46,8 +46,9 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
         ack?.({ ok: false, error: 'not_found' });
         return;
       }
+      // sendMessage broadcasts to the channel itself, so every producer (this
+      // handler, the REST route, the support automation) delivers identically.
       const message = await sendMessage(payload.channelId, userId, payload.body, payload.attachmentIds);
-      io.to(`channel:${payload.channelId}`).emit('message:new', message);
       ack?.({ ok: true, message });
     } catch (err) {
       logger.error({ err }, 'message:send failed');

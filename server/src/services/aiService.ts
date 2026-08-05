@@ -10,7 +10,10 @@ const MAX_COMPLETION_TOKENS = 3000;
 const MAX_CONTEXT_MESSAGES = 20;
 
 const DecisionSchema = z.object({
-  action: z.enum(['ask_clarification', 'create_ticket']),
+  // 'none' is the terminal state. Without it every human message forced either a
+  // question or a ticket, so a bare "thanks!" re-triaged the whole transcript and
+  // filed a duplicate — an unbounded, paid runaway with a human in the loop.
+  action: z.enum(['none', 'ask_clarification', 'create_ticket']),
   question: z.string().nullable(),
   title: z.string().nullable(),
   description: z.string().nullable(),
@@ -28,7 +31,7 @@ const RESPONSE_FORMAT = {
       type: 'object',
       additionalProperties: false,
       properties: {
-        action: { type: 'string', enum: ['ask_clarification', 'create_ticket'] },
+        action: { type: 'string', enum: ['none', 'ask_clarification', 'create_ticket'] },
         question: { type: ['string', 'null'] },
         title: { type: ['string', 'null'] },
         description: { type: ['string', 'null'] },
@@ -42,9 +45,14 @@ const RESPONSE_FORMAT = {
 const BASE_PROMPT = [
   'You triage an internal company support chat.',
   'Read the conversation and decide exactly one action.',
-  'If the report is too vague to act on, choose "ask_clarification" and write ONE specific question.',
-  'If there is enough detail, choose "create_ticket" with a short imperative title, a concise',
-  'description summarising the problem, and a priority of low, medium, high, or urgent.',
+  'Choose "none" when there is nothing to do: small talk, greetings, acknowledgements such as',
+  '"thanks" or "ok", or — most importantly — when an earlier message from you in this same',
+  'conversation already says a ticket was filed. Never file a second ticket for a problem that',
+  'has already been filed; prefer "none" whenever you are unsure.',
+  'If a new report is too vague to act on, choose "ask_clarification" and write ONE specific question.',
+  'If there is enough detail and no ticket exists yet for it, choose "create_ticket" with a short',
+  'imperative title, a concise description summarising the problem, and a priority of low, medium,',
+  'high, or urgent.',
   'Set every field you are not using to null.',
 ].join(' ');
 

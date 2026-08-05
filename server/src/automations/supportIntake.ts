@@ -52,6 +52,13 @@ async function handleSupportMessage(payload: MessageCreatedEvent): Promise<void>
   });
   if (!decision) return; // AI unavailable or unusable — chat is unaffected
 
+  // Nothing to do: acknowledgements, small talk, or a ticket already filed.
+  // Returning here is what stops the bot acting on every message forever.
+  if (decision.action === 'none') {
+    logger.debug({ channelId }, 'supportIntake: no action needed');
+    return;
+  }
+
   if (decision.action === 'ask_clarification') {
     if (!decision.question) return;
     await sendMessage(channelId, botUserId, decision.question);

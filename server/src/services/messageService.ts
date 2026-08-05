@@ -14,6 +14,7 @@ import { linkAttachment } from './attachmentService.js';
 import { visibilityCondition } from './channelService.js';
 import { events } from './events.js';
 import { parseMentions } from './mentionService.js';
+import { getIo } from '../sockets/registry.js';
 
 export interface AttachmentInfo {
   id: number;
@@ -154,7 +155,16 @@ export async function sendMessage(
     channel: { id: channel.id, type: channel.type, kind: channel.kind, isPrivate: channel.isPrivate },
   });
   const attachmentsByMessage = await hydrateAttachments([id]);
-  return toDto(row, new Map(), attachmentsByMessage);
+  const dto = toDto(row, new Map(), attachmentsByMessage);
+
+  // Broadcast here rather than in the socket handler: the REST route and the
+  // support automation also send messages, and when only the handler emitted,
+  // their messages never reached a connected client. The bot's replies were the
+  // visible casualty — the headline Phase 7 feature appeared to do nothing until
+  // the page was reloaded.
+  getIo()?.to(`channel:${channelId}`).emit('message:new', dto);
+
+  return dto;
 }
 
 export async function getMessagesBefore(

@@ -7,12 +7,15 @@ import { pool } from './db/index.js';
 import { logger } from './logger.js';
 import { runAttachmentGc } from './services/attachmentService.js';
 import { registerSocketHandlers } from './sockets/index.js';
+import { setIo } from './sockets/registry.js';
 
 const app = createApp();
 const server = http.createServer(app);
 
 const io = new Server(server, { cors: { origin: config.corsOrigins } });
 app.set('io', io);
+// Also reachable from the service layer, so sendMessage can broadcast.
+setIo(io);
 registerSocketHandlers(io);
 registerAutomations();
 
