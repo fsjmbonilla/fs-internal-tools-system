@@ -1,117 +1,37 @@
-import OpenAI from 'openai';
-import { z } from 'zod';
-import { config } from '../config.js';
-import { logger } from '../logger.js';
+import { activeProvider } from './ai/index.js';
+import type { TriageDecision, TriageInput } from './ai/triage.js';
 
-// gpt-5-nano is a reasoning model: it spends 700–1400 hidden reasoning tokens even on
-// trivial prompts. Too low a cap and reasoning eats the whole budget, yielding HTTP 200
-// with finish_reason 'length' and an EMPTY content string (verified against the live API).
-const MAX_COMPLETION_TOKENS = 3000;
-const MAX_CONTEXT_MESSAGES = 20;
+/**
+ * AI triage, provider-agnostic.
+ *
+ * Callers only ever needed "decide what to do with this conversation", so that is
+ * all this exposes. Which backend answers is a configuration question —
+ * AI_PROVIDER, openai or anthropic — and the prompt and decision schema are
+ * shared between them, so switching changes how the request is made rather than
+ * what is being decided.
+ *
+ * The implementations live in ./ai: triage.ts holds the shared contract,
+ * openaiProvider.ts and anthropicProvider.ts hold one backend each.
+ */
 
-const DecisionSchema = z.object({
-  // 'none' is the terminal state. Without it every human message forced either a
-  // question or a ticket, so a bare "thanks!" re-triaged the whole transcript and
-  // filed a duplicate — an unbounded, paid runaway with a human in the loop.
-  action: z.enum(['none', 'ask_clarification', 'create_ticket']),
-  question: z.string().nullable(),
-  title: z.string().nullable(),
-  description: z.string().nullable(),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).nullable(),
-});
-
-export type TriageDecision = z.infer<typeof DecisionSchema>;
-
-const RESPONSE_FORMAT = {
-  type: 'json_schema' as const,
-  json_schema: {
-    name: 'triage',
-    strict: true,
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        action: { type: 'string', enum: ['none', 'ask_clarification', 'create_ticket'] },
-        question: { type: ['string', 'null'] },
-        title: { type: ['string', 'null'] },
-        description: { type: ['string', 'null'] },
-        priority: { type: ['string', 'null'], enum: ['low', 'medium', 'high', 'urgent', null] },
-      },
-      required: ['action', 'question', 'title', 'description', 'priority'],
-    },
-  },
-};
-
-const BASE_PROMPT = [
-  'You triage an internal company support chat.',
-  'Read the conversation and decide exactly one action.',
-  'Choose "none" when there is nothing to do: small talk, greetings, acknowledgements such as',
-  '"thanks" or "ok", or — most importantly — when an earlier message from you in this same',
-  'conversation already says a ticket was filed. Never file a second ticket for a problem that',
-  'has already been filed; prefer "none" whenever you are unsure.',
-  'If a new report is too vague to act on, choose "ask_clarification" and write ONE specific question.',
-  'If there is enough detail and no ticket exists yet for it, choose "create_ticket" with a short',
-  'imperative title, a concise description summarising the problem, and a priority of low, medium,',
-  'high, or urgent.',
-  'Set every field you are not using to null.',
-].join(' ');
-
-let client: OpenAI | null | undefined;
-
-function getClient(): OpenAI | null {
-  if (client !== undefined) return client;
-  client = config.OPENAI_API_KEY ? new OpenAI({ apiKey: config.OPENAI_API_KEY }) : null;
-  return client;
-}
+export type { TriageDecision } from './ai/triage.js';
 
 export function isAiConfigured(): boolean {
-  return Boolean(config.OPENAI_API_KEY);
+  return activeProvider().isConfigured();
 }
 
-export async function triageSupportConversation(input: {
-  messages: { displayName: string; body: string }[];
-  instructions?: string | null;
-}): Promise<TriageDecision | null> {
-  const openai = getClient();
-  if (!openai) return null;
+/** Which provider is in use — for diagnostics and logs. */
+export function aiProviderName(): string {
+  return activeProvider().name;
+}
 
-  const system = input.instructions ? `${BASE_PROMPT}\n\nExtra guidance: ${input.instructions}` : BASE_PROMPT;
-  // A pasted log or stack trace would otherwise send tens of thousands of tokens
-  // per triage. Enough of each message survives to triage it.
-  const MAX_BODY_CHARS = 2000;
-  const transcript = input.messages
-    .slice(-MAX_CONTEXT_MESSAGES)
-    .map((m) => `${m.displayName}: ${m.body.slice(0, MAX_BODY_CHARS)}`)
-    .join('\n');
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: config.AI_MODEL,
-      max_completion_tokens: MAX_COMPLETION_TOKENS,
-      response_format: RESPONSE_FORMAT,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: transcript },
-      ],
-    });
-
-    const choice = completion.choices[0];
-    const content = choice?.message?.content;
-    if (!content) {
-      // Empty content with finish_reason 'length' = reasoning exhausted the token budget.
-      logger.warn({ finishReason: choice?.finish_reason }, 'AI triage returned no content');
-      return null;
-    }
-
-    const parsed = DecisionSchema.safeParse(JSON.parse(content));
-    if (!parsed.success) {
-      logger.warn({ issues: parsed.error.issues }, 'AI triage response failed schema validation');
-      return null;
-    }
-    return parsed.data;
-  } catch (err) {
-    // Fail-soft on everything (network, 4xx/5xx, malformed JSON): chat must never break.
-    logger.error({ err }, 'AI triage failed');
-    return null;
-  }
+/**
+ * Returns null whenever no decision could be reached: unconfigured, refused,
+ * schema mismatch, or an API failure. Every caller treats null as "do nothing",
+ * which is what keeps chat working when the AI does not.
+ */
+export async function triageSupportConversation(
+  input: TriageInput,
+): Promise<TriageDecision | null> {
+  return activeProvider().triage(input);
 }

@@ -16,6 +16,7 @@
   "keywords": [],
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@aws-sdk/client-s3": "^3.1093.0",
     "@aws-sdk/s3-request-presigner": "^3.1093.0",
     "argon2": "^0.45.1",

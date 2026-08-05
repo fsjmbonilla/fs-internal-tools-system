@@ -40,8 +40,14 @@ const EnvSchema = z.object({
   LIVEKIT_API_SECRET: z.string().optional(),
   // AI support intake: unset means aiService.ts returns null and supportIntake skips —
   // chat must stay fully functional without AI (fail-soft, unlike LIVEKIT's 503).
+  // Which AI backend triage uses. Swapping this is the whole switch — the prompt
+  // and the decision schema are shared, so only the request shape changes.
+  AI_PROVIDER: z.enum(['openai', 'anthropic']).default('openai'),
   OPENAI_API_KEY: z.string().optional(),
-  AI_MODEL: z.string().default('gpt-5-nano'),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  // Empty means "the provider's own default", since a model name is only valid
+  // for one provider. See each provider module for what it picks and why.
+  AI_MODEL: z.string().default(''),
   SUPPORT_DEBOUNCE_MS: z.coerce.number().int().nonnegative().default(5000),
 });
 
