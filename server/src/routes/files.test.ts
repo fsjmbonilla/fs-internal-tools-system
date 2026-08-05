@@ -4,6 +4,13 @@ import { createApp } from '../app.js';
 import { resetDb } from '../db/testUtils.js';
 import { makeUser } from '../testHelpers.js';
 
+// Real PNG bytes: uploads are verified against their magic bytes now, so a
+// placeholder string labelled image/png is refused (see hardening.test.ts).
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
 const app = createApp();
 
 describe('file routes', () => {
@@ -80,7 +87,7 @@ describe('file routes', () => {
     const upload = await request(app)
       .post('/api/uploads')
       .set('Authorization', `Bearer ${owner.token}`)
-      .attach('files', Buffer.from('img'), { filename: 'shot.png', contentType: 'image/png' });
+      .attach('files', PNG, { filename: 'shot.png', contentType: 'image/png' });
     const attachmentId = upload.body.attachments[0].id;
 
     await request(app)

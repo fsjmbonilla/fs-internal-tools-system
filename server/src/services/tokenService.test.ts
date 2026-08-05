@@ -23,7 +23,10 @@ describe('tokenService', () => {
 
   it('access token round-trips claims', async () => {
     const token = await signAccessToken({ id: 7, role: 'admin' });
-    expect(await verifyAccessToken(token)).toEqual({ userId: 7, role: 'admin' });
+    // expiresAt is exposed so a long-lived socket can be closed when its
+    // credentials expire; HTTP re-verifies per request and ignores it.
+    expect(await verifyAccessToken(token)).toMatchObject({ userId: 7, role: 'admin' });
+    expect((await verifyAccessToken(token))?.expiresAt).toBeGreaterThan(Date.now() / 1000);
     expect(await verifyAccessToken('garbage')).toBeNull();
   });
 

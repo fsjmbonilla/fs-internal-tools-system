@@ -141,8 +141,14 @@ worth closing permanently.
 
 **Finding:** `src/lib/storage.ts:21` keeps the 30-day refresh token in `localStorage` on web (Capacitor `Preferences` on native, fine). Any XSS = 30-day account takeover. The mitigations (A1/A2) reduce XSS surface; the structural fix is an httpOnly cookie flow for web.
 
-- [ ] Decision task (small spike, not a blind rewrite): either (a) move web refresh to an `httpOnly; Secure; SameSite=Strict; Path=/api/auth` cookie — server sets/rotates it on login/refresh, body-token flow stays for native (`User-Agent`/platform flag chooses), CORS gains `credentials: true` for the SPA origin only; or (b) explicitly accept localStorage with a dated note in the README. Follow the official Express cookie guidance (`secure`, `httpOnly`, scoped `path`) if (a).
-- [ ] If (a): tests for cookie rotation + family revocation on reuse (tokenService semantics unchanged — `tokenService.ts:57-80` already does families correctly).
+- [x] **Decision (2026-08-05): (b) for now — keep localStorage, documented, and revisit with the same-origin change below.** Recorded in the README's security section. Two things came out of the spike that the plan did not know:
+
+  1. **(a) cannot work in dev as the app is currently served.** The SPA runs on `localhost:5173` and the API on `localhost:4000` — different origins, so a `SameSite=Strict|Lax` cookie is never sent. Making it work requires `SameSite=None; Secure`, i.e. HTTPS on localhost, or a **Vite dev proxy** (`/api` → `:4000`) so dev is same-origin like production. The proxy is the right answer, but it changes how everyone runs the app locally and how `VITE_SERVER_URL`/the socket URL are resolved — that is the owner's call, not a side effect of a hardening pass.
+  2. **The XSS surface is smaller than assumed.** There is exactly one HTML-rendering path (`src/features/docs/Markdown.tsx`), it runs `rehype-sanitize`, and there is no `dangerouslySetInnerHTML` anywhere in `src/`. Combined with helmet + `nosniff` + the sandboxed file CSP (A1/A2) and the fact that uploads can no longer masquerade as HTML, the token is not sitting behind an open door.
+
+  Native is already correct: Capacitor `Preferences` is backed by the Keychain / EncryptedSharedPreferences, so mobile is unaffected either way.
+
+- [ ] **Follow-up (needs an owner decision, not blocked on code):** add the Vite `/api` dev proxy, then move web refresh to `httpOnly; Secure; SameSite=Strict; Path=/api/auth`, keeping the body-token flow for native. Tests: cookie rotation, and family revocation on reuse (`tokenService.ts` semantics stay as they are — they are already correct).
 
 ### Task A7: Upload API must report what it rejected
 

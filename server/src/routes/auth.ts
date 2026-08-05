@@ -5,7 +5,7 @@ import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { authLimiter } from '../middleware/rateLimit.js';
+import { authLimiter, refreshLimiter } from '../middleware/rateLimit.js';
 import { validate } from '../middleware/validate.js';
 import { login, register, toPublicUser } from '../services/authService.js';
 import { refreshSession, revokeRefreshToken } from '../services/tokenService.js';
@@ -30,7 +30,7 @@ authRouter.post('/login', authLimiter, validate(loginBody), async (req, res) => 
   res.json(await login(email, password, req.headers['user-agent']));
 });
 
-authRouter.post('/refresh', validate(refreshBody), async (req, res) => {
+authRouter.post('/refresh', refreshLimiter, validate(refreshBody), async (req, res) => {
   const { refreshToken } = req.valid as z.infer<typeof refreshBody>;
   const session = await refreshSession(refreshToken, req.headers['user-agent']);
   if (!session) throw new AppError(401, 'invalid_refresh', 'Refresh token is invalid or reused');
@@ -42,7 +42,7 @@ authRouter.post('/refresh', validate(refreshBody), async (req, res) => {
   });
 });
 
-authRouter.post('/logout', validate(refreshBody), async (req, res) => {
+authRouter.post('/logout', refreshLimiter, validate(refreshBody), async (req, res) => {
   await revokeRefreshToken((req.valid as z.infer<typeof refreshBody>).refreshToken);
   res.json({ ok: true });
 });

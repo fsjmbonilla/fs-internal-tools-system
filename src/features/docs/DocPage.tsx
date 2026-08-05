@@ -5,7 +5,7 @@ import { useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { AttachmentChip, type AttachmentInfo } from '@/features/files/AttachmentChip';
 import { api } from '@/lib/api';
-import { uploadFiles } from '@/lib/uploads';
+import { rejectionMessage, uploadFiles } from '@/lib/uploads';
 import { Markdown } from './Markdown';
 
 interface Doc {
@@ -28,6 +28,7 @@ export function DocPage() {
   });
   const [content, setContent] = useState('');
   const [preview, setPreview] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   useEffect(() => {
     if (data) setContent(data.doc.content);
@@ -40,12 +41,18 @@ export function DocPage() {
 
   const attach = useMutation({
     mutationFn: async (files: File[]) => {
-      const uploaded = await uploadFiles(files);
+      const { attachments, rejected } = await uploadFiles(files);
+      // Refused files get no row and no chip; the caller shows this instead of
+      // letting them look like they silently vanished.
+      setAttachError(rejectionMessage(rejected));
+      if (attachments.length === 0) return null;
       return api(`/api/docs/${id}/attachments`, {
         method: 'POST',
-        body: { attachmentIds: uploaded.map((f) => f.id) },
+        body: { attachmentIds: attachments.map((f) => f.id) },
       });
     },
+    onError: (err: unknown) =>
+      setAttachError(err instanceof Error ? err.message : 'Upload failed'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['doc', id] }),
   });
 
@@ -53,6 +60,11 @@ export function DocPage() {
 
   return (
     <div className="flex h-full flex-col p-4">
+      {attachError && (
+        <p role="alert" className="mb-2 text-xs text-destructive">
+          {attachError}
+        </p>
+      )}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="font-semibold">{data.doc.title}</h2>
         <div className="flex gap-2">

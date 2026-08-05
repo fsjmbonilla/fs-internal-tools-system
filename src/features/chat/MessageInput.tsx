@@ -1,12 +1,13 @@
 import { Paperclip } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { sendMessage as sendSocketMessage, startTyping, stopTyping } from '@/lib/socket';
-import { uploadFiles, type UploadedFile } from '@/lib/uploads';
+import { rejectionMessage, uploadFiles, type UploadedFile } from '@/lib/uploads';
 
 export function MessageInput({ channelId, onSent }: { channelId: number; onSent: () => void }) {
   const [value, setValue] = useState('');
   const [pending, setPending] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -22,9 +23,15 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
     e.target.value = '';
     if (files.length === 0) return;
     setUploading(true);
+    setUploadError(null);
     try {
-      const uploaded = await uploadFiles(files);
-      setPending((prev) => [...prev, ...uploaded]);
+      const { attachments, rejected } = await uploadFiles(files);
+      setPending((prev) => [...prev, ...attachments]);
+      // A file the server refused gets no chip, so say so rather than letting it
+      // look like the attachment silently disappeared.
+      setUploadError(rejectionMessage(rejected));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -44,6 +51,11 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
 
   return (
     <div className="border-t p-3">
+      {uploadError && (
+        <p role="alert" className="mb-2 text-xs text-destructive">
+          {uploadError}
+        </p>
+      )}
       {pending.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {pending.map((f) => (

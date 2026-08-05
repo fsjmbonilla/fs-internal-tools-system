@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Textarea } from '@/components/ui/textarea';
 import { AttachmentChip, type AttachmentInfo } from '@/features/files/AttachmentChip';
 import { api } from '@/lib/api';
-import { uploadFiles } from '@/lib/uploads';
+import { rejectionMessage, uploadFiles } from '@/lib/uploads';
 
 interface Task {
   id: number;
@@ -36,6 +36,7 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
     queryFn: () => api<{ comments: Comment[] }>(`/api/tasks/${taskId}/comments`),
   });
   const [comment, setComment] = useState('');
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   const addComment = useMutation({
     mutationFn: () => api(`/api/tasks/${taskId}/comments`, { method: 'POST', body: { body: comment } }),
@@ -47,12 +48,18 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
 
   const attach = useMutation({
     mutationFn: async (files: File[]) => {
-      const uploaded = await uploadFiles(files);
+      const { attachments, rejected } = await uploadFiles(files);
+      // Refused files get no row and no chip; the caller shows this instead of
+      // letting them look like they silently vanished.
+      setAttachError(rejectionMessage(rejected));
+      if (attachments.length === 0) return null;
       return api(`/api/tasks/${taskId}/attachments`, {
         method: 'POST',
-        body: { attachmentIds: uploaded.map((f) => f.id) },
+        body: { attachmentIds: attachments.map((f) => f.id) },
       });
     },
+    onError: (err: unknown) =>
+      setAttachError(err instanceof Error ? err.message : 'Upload failed'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['task', taskId] }),
   });
 
@@ -66,6 +73,11 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
           {task?.task.description && <p className="text-sm">{task.task.description}</p>}
           {task?.task.dueDate && <p className="text-xs text-muted-foreground">Due {task.task.dueDate}</p>}
           <div>
+            {attachError && (
+              <p role="alert" className="mb-2 text-xs text-destructive">
+                {attachError}
+              </p>
+            )}
             <div className="mb-2 flex items-center justify-between">
               <h4 className="text-sm font-semibold">Attachments</h4>
               <button

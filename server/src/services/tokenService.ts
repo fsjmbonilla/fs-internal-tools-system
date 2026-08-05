@@ -21,10 +21,16 @@ export async function signAccessToken(user: { id: number; role: Role }): Promise
 
 export async function verifyAccessToken(
   token: string,
-): Promise<{ userId: number; role: Role } | null> {
+): Promise<{ userId: number; role: Role; expiresAt: number | null } | null> {
   try {
     const { payload } = await jwtVerify(token, secret);
-    return { userId: Number(payload.sub), role: payload.role as Role };
+    return {
+      userId: Number(payload.sub),
+      role: payload.role as Role,
+      // Exposed so a long-lived connection can be closed when its credentials
+      // expire; HTTP requests re-verify per call and can ignore it.
+      expiresAt: typeof payload.exp === 'number' ? payload.exp : null,
+    };
   } catch {
     return null;
   }

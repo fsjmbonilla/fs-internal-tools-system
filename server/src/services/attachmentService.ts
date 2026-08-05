@@ -25,6 +25,66 @@ export const MIME_WHITELIST = new Set([
   'application/vnd.oasis.opendocument.presentation',
 ]);
 
+/**
+ * Types with no magic bytes to sniff. `file-type` returns undefined for these
+ * because they are plain text, so their declared type is all we have — which is
+ * safe only because none of them can execute in a browser and the file route
+ * serves everything but images and PDFs as a download.
+ */
+const UNSNIFFABLE = new Set(['text/csv']);
+
+/**
+ * Office formats are ZIP containers and legacy Office formats are CFB
+ * containers, so sniffing reports the container, not the document. Accept the
+ * container as evidence for its family rather than demanding an exact match.
+ */
+const CONTAINER_EQUIVALENTS: Record<string, string[]> = {
+  'application/zip': [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation',
+  ],
+  'application/x-cfb': [
+    'application/msword',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-powerpoint',
+  ],
+};
+
+/** Served inline in the browser; everything else downloads. */
+export const INLINEABLE = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+]);
+
+/**
+ * Verify the bytes match the declared type.
+ *
+ * multer's fileFilter can only see `file.mimetype`, which the client sends and
+ * therefore controls: an HTML payload labelled `image/png` passed the whitelist
+ * and was later served back with that Content-Type. Sniffing the magic bytes is
+ * what makes the whitelist mean anything.
+ */
+export async function verifyMime(buffer: Buffer, declared: string): Promise<boolean> {
+  if (!MIME_WHITELIST.has(declared)) return false;
+  const { fileTypeFromBuffer } = await import('file-type');
+  const sniffed = await fileTypeFromBuffer(buffer);
+
+  if (!sniffed) {
+    // Nothing recognizable. Only legitimate for the text formats; for anything
+    // else it means the bytes are not what the client claimed.
+    return UNSNIFFABLE.has(declared);
+  }
+  if (sniffed.mime === declared) return true;
+  return (CONTAINER_EQUIVALENTS[sniffed.mime] ?? []).includes(declared);
+}
+
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 200);
 }
@@ -36,8 +96,12 @@ export async function createUnlinkedAttachment(input: {
   mimeType: string;
   sizeBytes: number;
 }): Promise<AttachmentDto> {
-  if (!MIME_WHITELIST.has(input.mimeType)) {
-    throw new AppError(400, 'unsupported_mime', `File type ${input.mimeType} is not allowed`);
+  if (!(await verifyMime(input.buffer, input.mimeType))) {
+    throw new AppError(
+      400,
+      'unsupported_mime',
+      `File contents do not match the declared type ${input.mimeType}`,
+    );
   }
   const key = `uploads/${randomUUID()}-${sanitizeFileName(input.fileName)}`;
   await getStorageDriver().put(key, input.buffer, input.mimeType);

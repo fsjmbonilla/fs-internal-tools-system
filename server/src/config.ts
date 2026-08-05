@@ -22,6 +22,9 @@ const EnvSchema = z.object({
   REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   // Opportunistic caching only — unset means cache.ts no-ops everywhere.
   MEMCACHED_SERVERS: z.string().optional(),
+  // Set when the app sits behind a proxy/load balancer that appends
+  // X-Forwarded-For. Left unset it follows NODE_ENV — see the export below.
+  TRUST_PROXY: z.enum(['true', 'false']).optional(),
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   UPLOAD_DIR: z.string().default('./uploads'),
   S3_BUCKET: z.string().optional(),
@@ -43,4 +46,11 @@ if (parsed.data.NODE_ENV === 'production' && parsed.data.JWT_SECRET === 'dev-sec
 export const config = {
   ...parsed.data,
   corsOrigins: parsed.data.CORS_ORIGIN.split(',').map((o) => o.trim()),
+  // In production there is always a proxy in front (ALB / nginx); locally there
+  // is not, and trusting a forwarded header nobody sets would let any client
+  // claim any address — which is exactly what the rate limiter keys on.
+  TRUST_PROXY:
+    parsed.data.TRUST_PROXY !== undefined
+      ? parsed.data.TRUST_PROXY === 'true'
+      : parsed.data.NODE_ENV === 'production',
 };

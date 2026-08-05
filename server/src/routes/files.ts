@@ -1,10 +1,11 @@
+import { create as contentDisposition } from 'content-disposition';
 import { eq } from 'drizzle-orm';
 import { Router } from 'express';
 import { db } from '../db/index.js';
 import { docs, messages, tasks } from '../db/schema/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { getAttachment } from '../services/attachmentService.js';
+import { getAttachment, INLINEABLE } from '../services/attachmentService.js';
 import { getVisibleChannel } from '../services/channelService.js';
 import { getVisibleProject } from '../services/projectService.js';
 import { getStorageDriver } from '../storage/index.js';
@@ -44,7 +45,20 @@ filesRouter.get('/:id', async (req, res) => {
     res.redirect(signedUrl);
     return;
   }
+
+  // Only images and PDFs render in place; everything else downloads. An office
+  // document or CSV opened inline is a document the browser may hand to a
+  // plugin, and there is no reason to take that risk for a file the user is
+  // going to save anyway.
+  const disposition = INLINEABLE.has(attachment.mimeType) ? 'inline' : 'attachment';
+
   res.setHeader('Content-Type', attachment.mimeType);
-  res.setHeader('Content-Disposition', `inline; filename="${attachment.fileName}"`);
+  // contentDisposition() encodes the filename per RFC 6266. Interpolating it
+  // into the header by hand broke on any name containing a quote.
+  res.setHeader('Content-Disposition', contentDisposition(attachment.fileName, { type: disposition }));
+  // Defense in depth for the inline path: never let the browser re-guess the
+  // type, and strip the file of any origin privileges if it does render.
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
   driver.getStream(attachment.storageKey).pipe(res);
 });

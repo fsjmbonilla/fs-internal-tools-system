@@ -6,6 +6,7 @@ import { users } from '../db/schema/index.js';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
+import { events } from '../services/events.js';
 import { getAllowedDomains, setAllowedDomains } from '../services/settingsService.js';
 
 export const adminRouter = Router();
@@ -60,5 +61,16 @@ adminRouter.patch('/users/:id', validate(userPatch), async (req, res) => {
   const [row] = await db.select({ id: users.id }).from(users).where(eq(users.id, id));
   if (!row) throw new AppError(404, 'not_found', 'Not found');
   await db.update(users).set(patch).where(eq(users.id, id));
+
+  // A live socket carries the role and active flag it was handed at handshake,
+  // so both of these changes have to reach it. Deactivation must not leave a
+  // working session behind, and a demoted admin must not keep admin reach until
+  // their token happens to expire.
+  if (patch.isActive === false) {
+    events.emit('access.userSessionsInvalidated', { userId: id, reason: 'deactivated' });
+  } else if (patch.role !== undefined) {
+    events.emit('access.userSessionsInvalidated', { userId: id, reason: 'role_changed' });
+  }
+
   res.json({ ok: true });
 });

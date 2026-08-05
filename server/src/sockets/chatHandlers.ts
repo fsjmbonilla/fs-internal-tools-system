@@ -2,6 +2,7 @@ import type { Server, Socket } from 'socket.io';
 import { getVisibleChannel, isChannelMember } from '../services/channelService.js';
 import { logger } from '../logger.js';
 import { sendMessage, toggleReaction } from '../services/messageService.js';
+import { takeSendToken } from './sendRateLimit.js';
 
 interface SendPayload {
   channelId: number;
@@ -32,6 +33,13 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
   socket.on('message:send', async (payload: SendPayload, ack?: Ack) => {
     const userId = socket.data.userId as number;
     const isAdmin = socket.data.role === 'admin';
+    // Over-limit is acked, never disconnected: a client hitting the ceiling is
+    // usually pasting, not attacking, and dropping its connection would lose
+    // messages it already considers sent.
+    if (!takeSendToken(socket)) {
+      ack?.({ ok: false, error: 'rate_limited' });
+      return;
+    }
     try {
       const channel = await getVisibleChannel(payload.channelId, userId, isAdmin);
       if (!channel || (!isAdmin && !(await isChannelMember(payload.channelId, userId)))) {

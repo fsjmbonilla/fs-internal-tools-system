@@ -1,6 +1,7 @@
 import { and, eq, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { channelMembers, channels, departmentMembers } from '../db/schema/index.js';
+import { events } from './events.js';
 
 export type ChannelRow = typeof channels.$inferSelect;
 
@@ -57,6 +58,10 @@ export async function removeChannelMember(channelId: number, userId: number): Pr
   await db
     .delete(channelMembers)
     .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)));
+  // Their socket is already joined to this channel's room, so removal has to be
+  // pushed to it. Otherwise a removed member keeps receiving a private channel's
+  // messages in real time until they happen to reconnect.
+  events.emit('access.channelRevoked', { channelId, userId });
 }
 
 export async function createChannel(input: {

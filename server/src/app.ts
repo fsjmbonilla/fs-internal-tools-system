@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { config } from './config.js';
 import { logger } from './logger.js';
@@ -19,6 +20,30 @@ import { usersRouter } from './routes/users.js';
 
 export function createApp(): express.Express {
   const app = express();
+
+  // Reduce fingerprinting: nothing needs to know this is Express.
+  app.disable('x-powered-by');
+
+  // Behind the load balancer, req.ip has to come from X-Forwarded-For or every
+  // client shares one rate-limit bucket (the balancer's address) and the logs
+  // record the wrong origin. One hop only — trusting the whole chain would let a
+  // client forge its own address.
+  if (config.TRUST_PROXY) app.set('trust proxy', 1);
+
+  app.use(
+    helmet({
+      // This process serves JSON and file downloads, never HTML documents, so a
+      // document CSP has nothing to apply to. The file route sets its own
+      // sandbox CSP, which is where inline content actually gets served.
+      contentSecurityPolicy: false,
+      // Downloads are same-origin-ish reads by design (the SPA fetches them
+      // cross-origin in dev), so the strict default would break attachments.
+      crossOriginResourcePolicy: false,
+      // HSTS only where TLS actually terminates; sending it from a plain-HTTP
+      // dev server would pin localhost to HTTPS in the developer's browser.
+      hsts: config.NODE_ENV === 'production',
+    }),
+  );
 
   app.use(cors({ origin: config.corsOrigins }));
   app.use(express.json({ limit: '1mb' }));
