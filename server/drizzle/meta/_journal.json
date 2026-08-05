@@ -85,6 +85,13 @@
       "when": 1785935844126,
       "tag": "0011_api_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1785937681471,
+      "tag": "0012_notes_rich_format",
+      "breakpoints": true
     }
   ]
 }
