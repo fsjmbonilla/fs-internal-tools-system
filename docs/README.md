@@ -8,6 +8,7 @@ Drizzle ORM (MariaDB local / MySQL 8 prod) backend in `server/`, Dockerized for 
 
 | Document | What it is |
 | --- | --- |
+| [LOCAL-SETUP.md](LOCAL-SETUP.md) | How to get running on a fresh machine: DB creation, `server/.env` contents, migrations, seeds, PM2, and what's expected to fail. |
 | [MASTER-PLAN.md](MASTER-PLAN.md) | The overall product spec and phase roadmap (Phases 0–13): features, database schema, API surface, socket events, and cross-phase risks. The source of truth for *what* we're building. |
 | [PHASE7-PENDING-FIXES.md](PHASE7-PENDING-FIXES.md) | **Open work.** Phase 7 is implemented on branch `phase-7-ai-support` but not merged — two Critical issues must be fixed first. Read this before touching Phase 7. |
 | [superpowers/plans/](superpowers/plans/) | Per-phase implementation plans (task-by-task, TDD, with exact code). Written before each phase, kept afterwards as a record of what was built and why. |
