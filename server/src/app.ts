@@ -7,6 +7,7 @@ import { pinoHttp } from 'pino-http';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { mcpRouter } from './mcp/server.js';
 import { adminRouter } from './routes/admin.js';
 import { authRouter } from './routes/auth.js';
 import { callsRouter } from './routes/calls.js';
@@ -91,6 +92,8 @@ export function createApp(): express.Express {
   app.use('/api/push', pushRouter);
   app.use('/api/uploads', uploadsRouter);
   app.use('/api/files', filesRouter);
+  // Not under /api: an MCP endpoint is addressed by client config, not by the SPA.
+  app.use('/mcp', mcpRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
