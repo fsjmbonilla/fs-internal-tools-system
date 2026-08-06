@@ -428,7 +428,7 @@ export const AGENT_TOOLS: AgentTool[] = [
     name: 'send_gmail',
     description: "Send a plain-text email from the empowering user's Gmail address.",
     shape: {
-      to: z.string(),
+      to: z.email(),
       subject: z.string().min(1).max(500),
       body: z.string().min(1).max(100_000),
     },
@@ -454,7 +454,10 @@ async function googleCall<T>(
   try {
     return await fn(caller.googleUserId);
   } catch (err) {
-    if (err instanceof AppError && err.code.startsWith('google_')) {
+    if (err instanceof AppError) {
+      // Any coded error — a missing connection, a scope gap, rejected input —
+      // is something the model should read and adapt to, not a transport
+      // failure. Only genuinely unexpected errors propagate.
       return refusal(
         err.code === 'google_not_connected'
           ? 'The empowering user has not connected Google — they can do so in Settings.'

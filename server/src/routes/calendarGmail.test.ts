@@ -158,6 +158,35 @@ describe('gmail', () => {
     expect(res.status).toBe(404);
   });
 
+  it('rejects header-injection attempts in to and subject', async () => {
+    const { token } = await connectedUser();
+    const viaTo = await request(app)
+      .post('/api/gmail/send')
+      .set(auth(token))
+      .send({ to: 'a@b.co\r\nBcc: everyone@example.com', subject: 'hi', body: 'x' });
+    expect(viaTo.status).toBe(400);
+
+    // The service refuses even when route validation is bypassed — the agent
+    // tool calls sendMail directly, so this layer is the one that matters.
+    const { sendMail } = await import('../services/gmailService.js');
+    const { userId } = await connectedUser();
+    await expect(
+      sendMail(userId, { to: 'a@b.co', subject: 'hi\r\nBcc: x@y.z', body: 'x' }),
+    ).rejects.toMatchObject({ code: 'validation_error' });
+    await expect(
+      sendMail(userId, { to: 'not an email', subject: 'hi', body: 'x' }),
+    ).rejects.toMatchObject({ code: 'validation_error' });
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it('email links come back forced to safe new-tab targets', async () => {
+    const { token } = await connectedUser();
+    fake.inbox.push({ ...hostileMail, id: 'm2' });
+    const res = await request(app).get('/api/gmail/messages/m2').set(auth(token));
+    expect(res.body.message.bodyHtml).toContain('target="_blank"');
+    expect(res.body.message.bodyHtml).toContain('rel="noopener noreferrer nofollow"');
+  });
+
   it('sends mail through the connected account', async () => {
     const { token } = await connectedUser();
     const res = await request(app)
