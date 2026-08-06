@@ -25,8 +25,10 @@ Drizzle ORM (MariaDB local / MySQL 8 prod) backend in `server/`, Dockerized for 
 | 6 | Teleconference (self-hosted LiveKit) | Merged |
 | 7 | AI support channels (ticket-through-chat) | Merged (`b2b9bc9`), post-review fixes applied |
 | 8 | Service-token API + MCP server | Merged — verified end to end against the dev server |
-| 9 | Native Sheets + office previews | **In progress** — rich notes done (attachments, TipTap editor, `format`); Sheets + office previews not started |
-| 10–13 | Python script runner, AI Routines, Google Calendar/Gmail, Drive | Not started |
+| 9 | Native Sheets + office previews | Complete — rich notes, Univer sheets with an edit lock, vendored SheetJS xlsx, office previews |
+| 10 | Python script editor + sandboxed runner | Complete — see `runner/README.md` for what isolates a run |
+| 11 | AI Routines | Complete — needs `ANTHROPIC_API_KEY` set to actually run |
+| 12–13 | Google Calendar/Gmail, Drive | **Not started.** OAuth client, secret and redirect URI are already configured — nothing is blocked. |
 
 Off-roadmap work, deliberately unnumbered: [hardening & optimization](superpowers/plans/2026-08-05-hardening-optimization.md)
 (cross-cutting pass over phases 1–4) and the superseded

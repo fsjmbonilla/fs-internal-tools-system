@@ -101,43 +101,60 @@ quotes) and produces thousands of lines of noise. This has already happened once
 
 ## Current state (2026-08-06)
 
-**Phases 0–8 are complete.** Phase 8 (service tokens + MCP) shipped in commits
-`dbc3089`, `5b1e010`, `a984695`, verified end to end against the running dev server.
+**Phases 0–11 are complete.** 12 and 13 (Google Calendar/Gmail, then Drive) have not
+been started. `docs/MASTER-PLAN.md` is the authority on what they contain.
 
-**Phase 9 is in progress — steps 1–3 of 4 are done** (2026-08-06). Notes are full rich
-documents: TipTap 3 storing ProseMirror JSON, images as attachments, `format` validated
-server-side. Verified end to end in a real browser, not only by tests.
+Phases 9–11, all verified in a real browser rather than only by tests:
 
-- **Note attachments** — `POST /api/notes/:id/attachments`, and the `noteId` branch in
-  `files.ts` is **owner-only with admins deliberately excluded** (see invariant 2).
-  Deleting a note now deletes its stored objects, and converting one to a doc re-points
-  its attachments instead of orphaning them.
-- **Rich editor** — `src/features/notes/RichNoteEditor.tsx`. StarterKit v3 already
-  bundles Link and Underline; adding either separately registers a duplicate extension
-  name and throws at mount. Only `Image` and `TableKit` are extra.
-- **`format`** — `markdown` (every pre-existing note, a read path only) or `rich`. The
-  API refuses `rich` content that is not a ProseMirror document.
+- **9 — Sheets and rich notes.** Notes are TipTap 3 documents storing ProseMirror JSON
+  (`format` is `markdown` for pre-existing notes, a read path only). Native spreadsheets
+  run on Univer behind a socket-held edit lock, with xlsx import/export via a **vendored**
+  SheetJS 0.20.3, and uploaded office files preview in place.
+- **10 — Scripts.** Staff write Python; the API queues it; `runner/` executes it in a
+  sandbox. See invariant 9.
+- **11 — AI Routines.** A prompt plus a cron schedule, running a tool-use loop bounded by
+  scopes, iterations and a token budget, with a readable transcript per run.
 
-### Next step
+### To pick Phase 12 up
 
-4. **Sheets** (Univer via `@univerjs/presets`, lazy-loaded route, snapshot JSON as the
-   storage contract, lock service) and **office previews** (SheetJS grid, mammoth for
-   docx with sanitize, PDF iframe) — see `docs/MASTER-PLAN.md` Phase 9. Nothing for this
-   step exists yet. Lazy-load it: TipTap already took the Notes chunk to ~450 kB, and
-   Univer is heavier again.
+Google OAuth is **already configured**: client id and secret are in the gitignored
+`server/.env`, `config.ts` reads them, and the redirect URI
+(`http://localhost:4000/api/google/callback`) is registered on the client in the Cloud
+console. Nothing is blocked.
 
-### Rich notes — three traps, all found by running the app
+Migration numbering continues at **0017**. The pattern to follow is `googleService.ts`
+for token lifecycle, then `calendarService`/`gmailService`, then the support-mailbox
+poller (croner, watermark-idempotent) — the scheduler from Phase 11 is already there to
+copy from.
 
-- **An image src cannot be a URL.** `GET /api/files/:id` needs an `Authorization`
-  header and `<img>` sends none, so images are stored as `fs-attachment:<id>` and
-  swapped for object URLs on load. `richDoc.ts` does the swap in both directions;
-  storing the object URL instead would look fine until reload.
+### Things to know before touching phases 12–13
+
+- **Routines need `ANTHROPIC_API_KEY`.** It is unset, so every routine run currently
+  fails with a clear message. Triage is provider-switchable; routines are Claude-only by
+  the master plan's design. Everything else about routines works.
+- **SheetJS must stay vendored.** `vendor/xlsx-0.20.3.tgz` plus a package.json
+  `overrides` entry. The npm `xlsx` package is frozen at 0.18.5 with two unpatched CVEs —
+  do not "fix" this with `npm install xlsx`.
+- **Scaling out needs three things at once**, all currently single-process: Socket.IO
+  needs sticky sessions and a Redis adapter, the sheet edit lock is in memory, and one
+  process owns the routine cron timers.
+
+### Traps found the hard way, all still live
+
+- **An image src cannot be a URL.** `GET /api/files/:id` needs an `Authorization` header
+  and `<img>` sends none, so note images are stored as `fs-attachment:<id>` and swapped
+  for object URLs on load (`richDoc.ts`). Storing the object URL looks fine until reload.
 - **StrictMode double-mounts.** A "load once" ref that survives the unmount leaves the
-  first run cancelled and the second skipped — a saved note opens *blank*, with no
-  error, because nothing failed. Clear the guard in the effect's cleanup.
-- **Toolbar buttons must not take focus.** Without `onMouseDown` preventDefault the
-  button steals the selection, and the next thing typed goes to the button rather than
-  the note.
+  first run cancelled and the second skipped — a saved note opens *blank*, with no error,
+  because nothing failed. Clear the guard in the effect's cleanup.
+- **Toolbar buttons must not take focus.** Without `onMouseDown` preventDefault the button
+  steals the selection and the next thing typed goes to the button.
+- **`export { x } from '…'` creates no local binding.** Re-exporting the scope list that
+  way left `apiTokenService` unable to see `isScope`, and every token-authenticated
+  request 500'd. Import *and* re-export. tsc says so plainly — read the build output
+  rather than a grep of it.
+- **`python3 -I` drops the script's directory from `sys.path`**, so `import fs_sdk` fails.
+  The runner uses `-B -s -E`.
 
 ### Open items
 
