@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { AttachmentChip, type AttachmentInfo } from '@/features/files/AttachmentChip';
+import { CreateEventDialog } from '@/features/google/CreateEventDialog';
 import { api } from '@/lib/api';
 import { rejectionMessage, uploadFiles } from '@/lib/uploads';
 import { useProjectMembership } from '@/features/projects/useProjectMembership';
@@ -39,6 +40,7 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
   });
   const [comment, setComment] = useState('');
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   // Resolved from the loaded task: this sheet is opened from a board, not a route.
   const { canEdit } = useProjectMembership(task?.task.projectId ?? Number.NaN);
 
@@ -75,7 +77,20 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
         </SheetHeader>
         <div className="grid gap-4 p-4">
           {task?.task.description && <p className="text-sm">{task.task.description}</p>}
-          {task?.task.dueDate && <p className="text-xs text-muted-foreground">Due {task.task.dueDate}</p>}
+          <div className="flex items-center justify-between">
+            {task?.task.dueDate ? (
+              <p className="text-xs text-muted-foreground">Due {task.task.dueDate}</p>
+            ) : (
+              <span />
+            )}
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+              onClick={() => setCalendarOpen(true)}
+            >
+              Add to calendar
+            </button>
+          </div>
           <div>
             {attachError && (
               <p role="alert" className="mb-2 text-xs text-destructive">
@@ -135,6 +150,18 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
             )}
           </div>
         </div>
+        <CreateEventDialog
+          open={calendarOpen}
+          onOpenChange={setCalendarOpen}
+          prefill={{
+            title: task?.task.title,
+            // A dated task blocks out the morning of its due date; an undated
+            // one falls back to the dialog's next-slot default.
+            start: task?.task.dueDate ? `${task.task.dueDate.slice(0, 10)}T09:00` : undefined,
+            end: task?.task.dueDate ? `${task.task.dueDate.slice(0, 10)}T10:00` : undefined,
+            description: `Task: ${window.location.origin}/projects/${task?.task.projectId}`,
+          }}
+        />
       </SheetContent>
     </Sheet>
   );

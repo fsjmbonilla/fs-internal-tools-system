@@ -41,6 +41,15 @@ const RoutinesPage = lazy(() =>
 const AdminPage = lazy(() =>
   import('@/features/admin/AdminPage').then((m) => ({ default: m.AdminPage })),
 );
+const SettingsPage = lazy(() =>
+  import('@/features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+);
+const CalendarPage = lazy(() =>
+  import('@/features/google/CalendarPage').then((m) => ({ default: m.CalendarPage })),
+);
+const GmailPage = lazy(() =>
+  import('@/features/google/GmailPage').then((m) => ({ default: m.GmailPage })),
+);
 // Univer is a whole spreadsheet engine — formula evaluation, a canvas renderer,
 // the lot. Lazy like the rest, and worth being deliberate about: loading it on
 // the chat route would make every page pay for a feature most sessions never open.
@@ -97,6 +106,9 @@ export const router = createBrowserRouter([
           { path: '/sheets/:sheetId', element: <SheetPage /> },
           { path: '/notes', element: <NotesPage /> },
           { path: '/routines', element: <RoutinesPage /> },
+          { path: '/calendar', element: <CalendarPage /> },
+          { path: '/gmail', element: <GmailPage /> },
+          { path: '/settings', element: <SettingsPage /> },
           {
             element: <RequireAdmin />,
             children: [

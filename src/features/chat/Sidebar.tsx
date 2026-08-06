@@ -57,6 +57,12 @@ export function Sidebar() {
         <Link to="/routines" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
           Routines
         </Link>
+        <Link to="/calendar" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
+          Calendar
+        </Link>
+        <Link to="/gmail" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
+          Gmail
+        </Link>
         {/* Admin-only, matching the route and the API — a non-admin gets 404 on
             every scripts endpoint, so showing the link would only mislead. */}
         {user?.role === 'admin' && (
@@ -110,11 +116,16 @@ export function Sidebar() {
       <div className="flex items-center justify-between border-t border-white/10 p-3 text-sm">
         <div className="flex flex-col">
           <span>{user?.displayName}</span>
-          {user?.role === 'admin' && (
-            <Link to="/admin" className="text-xs text-white/60 underline">
-              Administration
+          <span className="flex gap-2">
+            <Link to="/settings" className="text-xs text-white/60 underline">
+              Settings
             </Link>
-          )}
+            {user?.role === 'admin' && (
+              <Link to="/admin" className="text-xs text-white/60 underline">
+                Administration
+              </Link>
+            )}
+          </span>
         </div>
         <button
           type="button"
