@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
@@ -74,6 +74,21 @@ export function ProjectBoardPage() {
 
   return (
     <div className="flex h-full flex-col p-4">
+      {/* The project's other surfaces. Docs and sheets predate this strip and
+          were reachable only via the quick-switcher; Files (Drive) arrives with
+          Phase 13 and needs a visible way in. */}
+      <nav className="mb-3 flex gap-3 text-sm">
+        <span className="font-medium">Board</span>
+        <Link to={`/projects/${id}/docs`} className="text-muted-foreground hover:underline">
+          Docs
+        </Link>
+        <Link to={`/projects/${id}/sheets`} className="text-muted-foreground hover:underline">
+          Sheets
+        </Link>
+        <Link to={`/projects/${id}/files`} className="text-muted-foreground hover:underline">
+          Files
+        </Link>
+      </nav>
       {canEdit && (
       <div className="mb-3 flex gap-2">
         <Input

@@ -234,6 +234,28 @@ describe('attach from Drive', () => {
     expect(denied.status).toBe(404);
   });
 
+  it('with no target creates an unlinked row the composer links at send time', async () => {
+    const user = await connectedUser();
+    const channel = await createChannel({
+      name: 'compose',
+      isPrivate: false,
+      createdBy: user.userId,
+    });
+    await addChannelMember(channel.id, user.userId);
+    const file = fake.addDriveFile({ name: 'later.pdf' });
+
+    const res = await request(app)
+      .post('/api/attachments/from-drive')
+      .set(auth(user.token))
+      .send({ driveFileId: file.id });
+    expect(res.status).toBe(201);
+    expect(res.body.attachment.messageId).toBeNull();
+
+    const message = await sendMessage(channel.id, user.userId, 'here', [res.body.attachment.id]);
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0].provider).toBe('gdrive');
+  });
+
   it('attaches to a message the caller can write to', async () => {
     const user = await connectedUser();
     const channel = await createChannel({

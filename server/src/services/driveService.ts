@@ -160,9 +160,12 @@ export async function attachFromDrive(
   const targets = [target.messageId, target.taskId, target.docId].filter(
     (t) => t !== undefined,
   ).length;
-  if (targets !== 1) {
-    throw new AppError(400, 'validation_error', 'Exactly one of messageId, taskId, docId');
+  if (targets > 1) {
+    throw new AppError(400, 'validation_error', 'At most one of messageId, taskId, docId');
   }
+  // Zero targets is the composer flow: the row starts unlinked (like an upload)
+  // and message send links it through the same linkAttachment gate — owner
+  // only, once only. Abandoned rows are ordinary GC food.
 
   // The caller must be able to WRITE where the chip lands — same bar as
   // posting the message or editing the task would demand. Notes are absent on

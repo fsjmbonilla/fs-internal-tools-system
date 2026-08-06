@@ -51,6 +51,15 @@ const TABLES = [
  * The same blind spot in production is what Task B1 fixes.
  */
 export async function resetDb(): Promise<void> {
+  // Refuse to truncate anything that is not unmistakably a test database.
+  // vitest run from the wrong directory misses vitest.config.ts and its
+  // DB_NAME override, and this function then points at the dev database —
+  // which is exactly how the local dev data got wiped once (2026-08-06).
+  if (!config.DB_NAME.endsWith('_test')) {
+    throw new Error(
+      `resetDb refused: DB_NAME is "${config.DB_NAME}", not a *_test database — run vitest from server/`,
+    );
+  }
   await pool.query('SET FOREIGN_KEY_CHECKS = 0');
   for (const t of TABLES) await pool.query(`TRUNCATE TABLE \`${t}\``);
   await pool.query('SET FOREIGN_KEY_CHECKS = 1');

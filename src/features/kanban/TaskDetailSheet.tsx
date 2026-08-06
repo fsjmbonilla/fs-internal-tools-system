@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { AttachmentChip, type AttachmentInfo } from '@/features/files/AttachmentChip';
+import { AttachFromDriveDialog } from '@/features/drive/AttachFromDriveDialog';
 import { CreateEventDialog } from '@/features/google/CreateEventDialog';
 import { api } from '@/lib/api';
 import { rejectionMessage, uploadFiles } from '@/lib/uploads';
@@ -41,6 +42,7 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
   const [comment, setComment] = useState('');
   const [attachError, setAttachError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [driveOpen, setDriveOpen] = useState(false);
   // Resolved from the loaded task: this sheet is opened from a board, not a route.
   const { canEdit } = useProjectMembership(task?.task.projectId ?? Number.NaN);
 
@@ -100,6 +102,14 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
             <div className="mb-2 flex items-center justify-between">
               <h4 className="text-sm font-semibold">Attachments</h4>
               {canEdit && (
+                <span className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="rounded-md px-1 text-xs text-muted-foreground underline hover:text-foreground"
+                  onClick={() => setDriveOpen(true)}
+                >
+                  from Drive
+                </button>
                 <button
                   type="button"
                   className="rounded-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-50"
@@ -109,6 +119,7 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
                 >
                   <Paperclip className="size-4" />
                 </button>
+                </span>
               )}
               <input
                 ref={fileInputRef}
@@ -150,6 +161,12 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
             )}
           </div>
         </div>
+        <AttachFromDriveDialog
+          open={driveOpen}
+          onOpenChange={setDriveOpen}
+          target={{ taskId }}
+          onAttached={() => queryClient.invalidateQueries({ queryKey: ['task', taskId] })}
+        />
         <CreateEventDialog
           open={calendarOpen}
           onOpenChange={setCalendarOpen}

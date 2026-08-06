@@ -50,6 +50,12 @@ const CalendarPage = lazy(() =>
 const GmailPage = lazy(() =>
   import('@/features/google/GmailPage').then((m) => ({ default: m.GmailPage })),
 );
+const MyDrivePage = lazy(() =>
+  import('@/features/drive/MyDrivePage').then((m) => ({ default: m.MyDrivePage })),
+);
+const ProjectFilesPage = lazy(() =>
+  import('@/features/drive/ProjectFilesPage').then((m) => ({ default: m.ProjectFilesPage })),
+);
 // Univer is a whole spreadsheet engine — formula evaluation, a canvas renderer,
 // the lot. Lazy like the rest, and worth being deliberate about: loading it on
 // the chat route would make every page pay for a feature most sessions never open.
@@ -103,6 +109,8 @@ export const router = createBrowserRouter([
           { path: '/projects/:projectId/docs', element: <DocListPage /> },
           { path: '/projects/:projectId/docs/:docId', element: <DocPage /> },
           { path: '/projects/:projectId/sheets', element: <SheetListPage /> },
+          { path: '/projects/:projectId/files', element: <ProjectFilesPage /> },
+          { path: '/drive', element: <MyDrivePage /> },
           { path: '/sheets/:sheetId', element: <SheetPage /> },
           { path: '/notes', element: <NotesPage /> },
           { path: '/routines', element: <RoutinesPage /> },

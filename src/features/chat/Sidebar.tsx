@@ -63,6 +63,9 @@ export function Sidebar() {
         <Link to="/gmail" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
           Gmail
         </Link>
+        <Link to="/drive" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
+          Drive
+        </Link>
         {/* Admin-only, matching the route and the API — a non-admin gets 404 on
             every scripts endpoint, so showing the link would only mislead. */}
         {user?.role === 'admin' && (

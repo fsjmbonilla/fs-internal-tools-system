@@ -10,6 +10,9 @@ export interface AttachmentInfo {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  /** Absent on older payload shapes; treated as 'internal'. */
+  provider?: 'internal' | 'gdrive';
+  webViewLink?: string | null;
 }
 
 function formatSize(bytes: number): string {
@@ -30,6 +33,26 @@ export function AttachmentChip({ attachment }: { attachment: AttachmentInfo }) {
   const [previewing, setPreviewing] = useState(false);
   const isImage = attachment.mimeType.startsWith('image/');
   const previewable = canPreview(attachment.mimeType);
+
+  // A Drive attachment is a reference — the bytes live in Google, so the chip
+  // deep-links there instead of previewing. Drive enforces its own permissions;
+  // a viewer without access requests it in Google, which is expected, not broken.
+  if (attachment.provider === 'gdrive') {
+    return (
+      <a
+        href={attachment.webViewLink ?? '#'}
+        target="_blank"
+        rel="noreferrer"
+        title="Opens in Google Drive"
+        className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+      >
+        <span className="truncate">{attachment.fileName}</span>
+        <span className="rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+          Drive
+        </span>
+      </a>
+    );
+  }
 
   return (
     <>

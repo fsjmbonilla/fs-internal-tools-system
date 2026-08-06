@@ -1,5 +1,6 @@
-import { Paperclip } from 'lucide-react';
+import { HardDrive, Paperclip } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { AttachFromDriveDialog } from '@/features/drive/AttachFromDriveDialog';
 import { sendMessage as sendSocketMessage, startTyping, stopTyping } from '@/lib/socket';
 import { rejectionMessage, uploadFiles, type UploadedFile } from '@/lib/uploads';
 
@@ -8,6 +9,7 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
   const [pending, setPending] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [driveOpen, setDriveOpen] = useState(false);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +78,31 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
           <Paperclip className="size-4" />
         </button>
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleFilePick} />
+        <button
+          type="button"
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+          onClick={() => setDriveOpen(true)}
+          aria-label="Attach from Drive"
+          title="Attach from Google Drive"
+        >
+          <HardDrive className="size-4" />
+        </button>
+        <AttachFromDriveDialog
+          open={driveOpen}
+          onOpenChange={setDriveOpen}
+          onAttached={(attachment) =>
+            // Unlinked for now — message send links it, same as an upload.
+            setPending((prev) => [
+              ...prev,
+              {
+                id: attachment.id,
+                fileName: attachment.fileName,
+                mimeType: attachment.mimeType,
+                sizeBytes: attachment.sizeBytes,
+              },
+            ])
+          }
+        />
         <textarea
           className="flex-1 resize-none rounded-md border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-ring"
           rows={2}
