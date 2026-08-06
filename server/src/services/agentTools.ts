@@ -19,6 +19,12 @@ import {
   updateSheet,
 } from './sheetService.js';
 import { createTask, getBoard, getTaskById, moveTask, updateTask } from './taskService.js';
+import {
+  createEvent as createCalendarEvent,
+  listEvents as listCalendarEvents,
+} from './calendarService.js';
+import { listMail, sendMail } from './gmailService.js';
+import { AppError } from '../middleware/errorHandler.js';
 import { getIo } from '../sockets/registry.js';
 
 /**
@@ -346,7 +352,97 @@ export const AGENT_TOOLS: AgentTool[] = [
       return { ...created, data: undefined };
     },
   }),
+
+  // ─── Google (Phase 12) ──────────────────────────────────────────────────────
+  // These act on the *empowering human's* Google connection (Caller.googleUserId
+  // — a routine's owner, a token's creator), never on anything of the bot's.
+  // A missing or broken connection is a refusal the model can read and relay,
+  // not a transport error.
+
+  tool({
+    scope: 'calendar:read',
+    name: 'list_calendar_events',
+    description:
+      "List the events on the empowering user's Google Calendar between two ISO datetimes.",
+    shape: { from: z.string(), to: z.string() },
+    unattended: true,
+    handler: async ({ from, to }, caller) =>
+      googleCall(caller, (googleUserId) => listCalendarEvents(googleUserId, from, to)),
+  }),
+
+  tool({
+    scope: 'calendar:write',
+    name: 'create_calendar_event',
+    // Unattended on purpose (unlike send_gmail): the artifact lands on the
+    // owner's own calendar where they will see it — visible, and undoable.
+    description: "Create an event on the empowering user's Google Calendar. Times are ISO 8601.",
+    shape: {
+      title: z.string().min(1).max(300),
+      start: z.string(),
+      end: z.string(),
+      attendees: z.array(z.string()).max(50).optional(),
+      description: z.string().max(10_000).optional(),
+      location: z.string().max(1000).optional(),
+    },
+    unattended: true,
+    handler: async (input, caller) =>
+      googleCall(caller, (googleUserId) => createCalendarEvent(googleUserId, input)),
+  }),
+
+  tool({
+    scope: 'gmail:read',
+    name: 'search_gmail',
+    description:
+      "Search the empowering user's Gmail inbox (Gmail query syntax). Returns sender, subject, snippet, and date per message.",
+    shape: { query: z.string().max(500).optional(), pageToken: z.string().optional() },
+    unattended: true,
+    handler: async ({ query, pageToken }, caller) =>
+      googleCall(caller, (googleUserId) => listMail(googleUserId, { q: query, pageToken })),
+  }),
+
+  tool({
+    scope: 'gmail:write',
+    name: 'send_gmail',
+    description: "Send a plain-text email from the empowering user's Gmail address.",
+    shape: {
+      to: z.string(),
+      subject: z.string().min(1).max(500),
+      body: z.string().min(1).max(100_000),
+    },
+    // Outbound email to arbitrary addresses with nobody watching is exactly the
+    // damage class the unattended flag exists for. MCP only.
+    unattended: false,
+    handler: async (input, caller) =>
+      googleCall(caller, (googleUserId) => sendMail(googleUserId, input)),
+  }),
 ];
+
+/**
+ * Run one Google-backed tool call, translating this surface's error contract:
+ * the REST services throw coded 409s; an agent gets a refusal it can read.
+ */
+async function googleCall<T>(
+  caller: Caller,
+  fn: (googleUserId: number) => Promise<T>,
+): Promise<T | Refusal> {
+  if (caller.googleUserId === undefined) {
+    return refusal('No Google account is available to this caller.');
+  }
+  try {
+    return await fn(caller.googleUserId);
+  } catch (err) {
+    if (err instanceof AppError && err.code.startsWith('google_')) {
+      return refusal(
+        err.code === 'google_not_connected'
+          ? 'The empowering user has not connected Google — they can do so in Settings.'
+          : err.code === 'google_connection_broken'
+            ? "The empowering user's Google connection is broken and needs reconnecting in Settings."
+            : err.message,
+      );
+    }
+    throw err;
+  }
+}
 
 /** The tools a caller holding these scopes may use. */
 export function toolsForScopes(scopes: readonly string[], opts: { unattendedOnly?: boolean } = {}) {

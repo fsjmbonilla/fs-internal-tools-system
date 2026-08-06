@@ -24,6 +24,14 @@ import { getVisibleProject, isProjectMember } from './projectService.js';
 export interface Caller {
   userId: number;
   isAdmin: boolean;
+  /**
+   * The human whose Google connection the caller's Google tools may use —
+   * a routine's owner, a service token's creator. Agents act as bot users,
+   * and a bot cannot hold a Google grant of its own; what it borrows is the
+   * connection of the person who empowered it, which is also who consented
+   * to the scopes it was given. Absent means Google tools refuse.
+   */
+  googleUserId?: number;
 }
 
 /** Reading a project needs only visibility. */

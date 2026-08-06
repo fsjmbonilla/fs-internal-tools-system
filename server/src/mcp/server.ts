@@ -37,6 +37,8 @@ interface Caller {
   userId: number;
   isAdmin: boolean;
   scopes: Scope[];
+  /** The token creator — whose Google connection the Google tools use. */
+  googleUserId?: number;
 }
 
 /** A tool result. MCP wants text content; JSON is what an agent can act on. */
@@ -125,6 +127,10 @@ mcpRouter.all('/', requireAuth, async (req, res) => {
     userId: auth.userId,
     isAdmin: auth.role === 'admin',
     scopes: auth.scopes ?? [],
+    // Google tools act on the connection of the person who minted this token —
+    // an MCP client is person-driven, and the minter is the person who chose
+    // to grant it google scopes.
+    googleUserId: auth.tokenCreatedBy,
   };
 
   const handler = createMcpHandler(() => buildMcpServer(caller));

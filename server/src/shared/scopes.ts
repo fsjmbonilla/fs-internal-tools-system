@@ -26,6 +26,13 @@ export const SCOPES = [
   'docs:write',
   'sheets:read',
   'sheets:write',
+  // Google surfaces (Phase 12). These gate *whose* Google? Never the bot's —
+  // a tool call uses the connection of the human behind the agent (a routine's
+  // owner, a token's creator), resolved via Caller.googleUserId in access.ts.
+  'calendar:read',
+  'calendar:write',
+  'gmail:read',
+  'gmail:write',
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];

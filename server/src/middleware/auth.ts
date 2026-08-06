@@ -24,6 +24,8 @@ export interface AuthContext {
   /** Present only for token auth. A user satisfies any scope check. */
   scopes?: Scope[];
   tokenId?: number;
+  /** Token auth only: who minted the token — whose Google its tools may borrow. */
+  tokenCreatedBy?: number;
 }
 
 declare module 'express-serve-static-core' {
@@ -45,6 +47,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       role: context.role,
       scopes: context.scopes,
       tokenId: context.tokenId,
+      tokenCreatedBy: context.createdBy,
     };
     next();
     return;

@@ -107,8 +107,11 @@ export async function runRoutine(
     return finish('failed', { error: 'No bot user is seeded, so a routine has no identity to act as' });
   }
   // A routine acts as the bot, never as its owner: its writes must be
-  // attributable to an automation, and it must not inherit a person's memberships.
-  const caller: Caller = { userId: botUserId, isAdmin: false };
+  // attributable to an automation, and it must not inherit a person's
+  // memberships. Google is the one deliberate exception — a bot cannot hold a
+  // Google grant, so Google tools borrow the *owner's* connection: they chose
+  // the routine's scopes, and "their morning digest" means their calendar.
+  const caller: Caller = { userId: botUserId, isAdmin: false, googleUserId: routine.ownerId };
 
   // Unattended-only: a routine runs with nobody watching, so it is offered the
   // verbs that make sense on a schedule rather than the full agent surface an

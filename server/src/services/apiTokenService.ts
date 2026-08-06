@@ -30,6 +30,8 @@ export interface TokenContext {
   tokenId: number;
   /** The bot user this token acts as — every write is attributed to it. */
   userId: number;
+  /** The person who minted the token — whose Google connection its tools may use. */
+  createdBy: number;
   role: 'admin' | 'member';
   scopes: Scope[];
 }
@@ -115,6 +117,7 @@ export async function verifyApiToken(token: string): Promise<TokenContext | null
       id: apiTokens.id,
       scopes: apiTokens.scopes,
       actsAsUserId: apiTokens.actsAsUserId,
+      createdBy: apiTokens.createdBy,
       expiresAt: apiTokens.expiresAt,
       revokedAt: apiTokens.revokedAt,
       role: users.role,
@@ -136,6 +139,7 @@ export async function verifyApiToken(token: string): Promise<TokenContext | null
   return {
     tokenId: row.id,
     userId: row.actsAsUserId,
+    createdBy: row.createdBy,
     role: row.role,
     scopes: (row.scopes ?? []).filter(isScope),
   };
