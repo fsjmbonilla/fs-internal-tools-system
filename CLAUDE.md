@@ -83,7 +83,7 @@ quotes) and produces thousands of lines of noise. This has already happened once
   register function) itself, and the effect is fire-and-forget — wait for it.
 - Files named `*.test.ts` are real suites here; `npm test` is a meaningful gate.
 
-## Current state (2026-08-05)
+## Current state (2026-08-06)
 
 **Phases 0–8 are complete.** Phase 8 (service tokens + MCP) shipped in commits
 `dbc3089`, `5b1e010`, `a984695`, verified end to end against the running dev server.
