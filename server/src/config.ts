@@ -61,6 +61,14 @@ const EnvSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().default('http://localhost:4000/api/google/callback'),
+  // Encrypts Google refresh tokens at rest (AES-256-GCM) — 64 hex chars = 32
+  // bytes, `openssl rand -hex 32`. Deliberately part of "is Google configured":
+  // a deployment that could store tokens but not encrypt them should offer the
+  // feature not at all rather than store them in the clear.
+  GOOGLE_TOKEN_ENC_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters (openssl rand -hex 32)')
+    .optional(),
   // The script runner's shared secret. Unset means /api/runner 503s — a runner
   // that cannot authenticate must fail loudly rather than run unauthenticated.
   RUNNER_TOKEN: z.string().optional(),
