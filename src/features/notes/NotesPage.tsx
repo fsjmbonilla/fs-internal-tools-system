@@ -1,11 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Markdown } from '@/features/docs/Markdown';
 import { createNote, deleteNote, listNotes, updateNote } from './api';
 import { MoveToProjectDialog } from './MoveToProjectDialog';
+import { RichNoteEditor } from './RichNoteEditor';
+import type { DocNode } from './richDoc';
 import type { Note } from './types';
+
+/** Parse stored rich content, tolerating a row that somehow is not a document. */
+function parseDoc(content: string): DocNode | null {
+  try {
+    const parsed = JSON.parse(content);
+    return parsed && typeof parsed === 'object' ? (parsed as DocNode) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function NotesPage() {
   const queryClient = useQueryClient();
@@ -83,14 +95,25 @@ function NoteEditor({
   const [title, setTitle] = useState(note.title);
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isRich = note.format === 'rich';
+  // A rich note's body lives in the editor, not in React state — reading it on
+  // every keystroke would re-render the page for each character typed.
+  const readDoc = useRef<(() => DocNode | null) | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   const save = useMutation({
     // The title was never part of this payload, so every note kept the
     // 'Untitled' it was created with. A blank title saves as 'Untitled' rather
     // than failing the API's min-length rule and losing the content edit.
-    mutationFn: () => updateNote(note.id, { title: title.trim() || 'Untitled', content }),
+    mutationFn: () => {
+      const base = { title: title.trim() || 'Untitled' };
+      if (!isRich) return updateNote(note.id, { ...base, content });
+      const doc = readDoc.current?.() ?? { type: 'doc', content: [] };
+      return updateNote(note.id, { ...base, content: JSON.stringify(doc), format: 'rich' });
+    },
     onSuccess: () => {
       setError(null);
+      setDirty(false);
       onSaved();
     },
     onError: (err: unknown) =>
@@ -118,15 +141,18 @@ function NoteEditor({
             }
           }}
         />
-        <Button variant="outline" size="sm" onClick={() => setPreview((v) => !v)}>
-          {preview ? 'Edit' : 'Preview'}
-        </Button>
+        {/* A rich note is already WYSIWYG — there is nothing for a preview to reveal. */}
+        {!isRich && (
+          <Button variant="outline" size="sm" onClick={() => setPreview((v) => !v)}>
+            {preview ? 'Edit' : 'Preview'}
+          </Button>
+        )}
         <MoveToProjectDialog noteId={note.id} noteTitle={note.title} />
         <Button variant="outline" size="sm" onClick={() => togglePin.mutate()}>
           {note.pinned ? 'Unpin' : 'Pin'}
         </Button>
         <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? 'Saving…' : 'Save'}
+          {save.isPending ? 'Saving…' : dirty ? 'Save •' : 'Save'}
         </Button>
         <Button variant="destructive" size="sm" onClick={onDelete}>
           Delete
@@ -137,7 +163,16 @@ function NoteEditor({
           {error}
         </p>
       )}
-      {preview ? (
+      {isRich ? (
+        <RichNoteEditor
+          noteId={note.id}
+          initialDoc={parseDoc(note.content)}
+          // Only the false→true transition matters; setting it on every keystroke
+          // would re-render this page for each character typed.
+          onDirty={() => setDirty((d) => d || true)}
+          editorRef={readDoc}
+        />
+      ) : preview ? (
         <div className="flex-1 overflow-auto rounded-md border p-3">
           <Markdown content={content} />
         </div>
@@ -146,7 +181,10 @@ function NoteEditor({
           className="flex-1 resize-none rounded-md border bg-background p-3 font-mono text-sm outline-none"
           value={content}
           placeholder="Markdown — # headings, **bold**, - lists, `code`"
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => {
+            setContent(e.target.value);
+            setDirty(true);
+          }}
         />
       )}
     </div>

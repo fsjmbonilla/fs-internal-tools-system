@@ -6,11 +6,28 @@ export const listNotes = (q?: string) => {
   return api<{ notes: Note[] }>(`/api/notes${params}`);
 };
 
+/**
+ * New notes are rich documents. Existing markdown notes keep their format and
+ * their renderer — nothing converts them, because a converter could only guess
+ * at what the markdown meant.
+ */
 export const createNote = (title: string) =>
-  api<{ note: Note }>('/api/notes', { method: 'POST', body: { title, content: '' } });
+  api<{ note: Note }>('/api/notes', {
+    method: 'POST',
+    body: { title, content: JSON.stringify({ type: 'doc', content: [] }), format: 'rich' },
+  });
 
-export const updateNote = (id: number, patch: Partial<Pick<Note, 'title' | 'content' | 'pinned'>>) =>
-  api<{ note: Note }>(`/api/notes/${id}`, { method: 'PATCH', body: patch });
+export const updateNote = (
+  id: number,
+  patch: Partial<Pick<Note, 'title' | 'content' | 'pinned' | 'format'>>,
+) => api<{ note: Note }>(`/api/notes/${id}`, { method: 'PATCH', body: patch });
+
+/** Link already-uploaded files to a note. Owner-only, like everything about notes. */
+export const attachNoteFiles = (id: number, attachmentIds: number[]) =>
+  api<{ note: Note }>(`/api/notes/${id}/attachments`, {
+    method: 'POST',
+    body: { attachmentIds },
+  });
 
 export const deleteNote = (id: number) => api(`/api/notes/${id}`, { method: 'DELETE' });
 

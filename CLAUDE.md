@@ -26,7 +26,7 @@ scope and order.
 
 ```bash
 # server (from server/)
-npm test                  # vitest + supertest against a real MySQL — 272 tests, 58 files
+npm test                  # vitest + supertest against a real MySQL — 287 tests, 60 files
 npx vitest run src/routes/notes.test.ts   # one file
 npm run build              # tsc
 npm run db:generate        # drizzle-kit generate, then rename the file + journal tag
@@ -88,27 +88,40 @@ quotes) and produces thousands of lines of noise. This has already happened once
 **Phases 0–8 are complete.** Phase 8 (service tokens + MCP) shipped in commits
 `dbc3089`, `5b1e010`, `a984695`, verified end to end against the running dev server.
 
-**Phase 9 is in progress** — Sheets (Univer) + office previews + notes as full rich
-documents. Done so far: migration `0012_notes_rich_format` (notes.content widened to
-MEDIUMTEXT, `format` enum added, applied to dev). Nothing reads `format` yet.
+**Phase 9 is in progress — steps 1–3 of 4 are done** (2026-08-06). Notes are full rich
+documents: TipTap 3 storing ProseMirror JSON, images as attachments, `format` validated
+server-side. Verified end to end in a real browser, not only by tests.
 
-### Next steps, in order
+- **Note attachments** — `POST /api/notes/:id/attachments`, and the `noteId` branch in
+  `files.ts` is **owner-only with admins deliberately excluded** (see invariant 2).
+  Deleting a note now deletes its stored objects, and converting one to a doc re-points
+  its attachments instead of orphaning them.
+- **Rich editor** — `src/features/notes/RichNoteEditor.tsx`. StarterKit v3 already
+  bundles Link and Underline; adding either separately registers a duplicate extension
+  name and throws at mount. Only `Image` and `TableKit` are extra.
+- **`format`** — `markdown` (every pre-existing note, a read path only) or `rich`. The
+  API refuses `rich` content that is not a ProseMirror document.
 
-1. **Note attachments.** `attachments.note_id` and `attachmentService` already support
-   a note parent (migration 0010), but there is no route to link one and `files.ts`
-   has no `noteId` branch — so an image inside a note would 404. Add both, and make
-   the file branch **owner-only, admins excluded** (this is the one place where admin
-   reach is deliberately narrower than everywhere else, because the admin can already
-   transfer notes without reading them).
-2. **Rich editor.** TipTap 3 (`@tiptap/react` + `starter-kit`, plus image/link/table
-   extensions) storing ProseMirror JSON with `format: 'rich'`. `NoteEditor` in
-   `src/features/notes/NotesPage.tsx` is the markdown textarea to replace; keep the
-   markdown render path for existing notes. Never store HTML.
-3. **Server support** for `format` in the notes create/patch schemas, validating that
-   rich content parses as a ProseMirror doc.
+### Next step
+
 4. **Sheets** (Univer via `@univerjs/presets`, lazy-loaded route, snapshot JSON as the
    storage contract, lock service) and **office previews** (SheetJS grid, mammoth for
-   docx with sanitize, PDF iframe) — see `docs/MASTER-PLAN.md` Phase 9.
+   docx with sanitize, PDF iframe) — see `docs/MASTER-PLAN.md` Phase 9. Nothing for this
+   step exists yet. Lazy-load it: TipTap already took the Notes chunk to ~450 kB, and
+   Univer is heavier again.
+
+### Rich notes — three traps, all found by running the app
+
+- **An image src cannot be a URL.** `GET /api/files/:id` needs an `Authorization`
+  header and `<img>` sends none, so images are stored as `fs-attachment:<id>` and
+  swapped for object URLs on load. `richDoc.ts` does the swap in both directions;
+  storing the object URL instead would look fine until reload.
+- **StrictMode double-mounts.** A "load once" ref that survives the unmount leaves the
+  first run cancelled and the second skipped — a saved note opens *blank*, with no
+  error, because nothing failed. Clear the guard in the effect's cleanup.
+- **Toolbar buttons must not take focus.** Without `onMouseDown` preventDefault the
+  button steals the selection, and the next thing typed goes to the button rather than
+  the note.
 
 ### Open items
 

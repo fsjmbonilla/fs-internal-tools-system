@@ -25,7 +25,7 @@ Drizzle ORM (MariaDB local / MySQL 8 prod) backend in `server/`, Dockerized for 
 | 6 | Teleconference (self-hosted LiveKit) | Merged |
 | 7 | AI support channels (ticket-through-chat) | Merged (`b2b9bc9`), post-review fixes applied |
 | 8 | Service-token API + MCP server | Merged — verified end to end against the dev server |
-| 9 | Native Sheets + office previews | **In progress** — migration `0012_notes_rich_format` applied; nothing reads `format` yet |
+| 9 | Native Sheets + office previews | **In progress** — rich notes done (attachments, TipTap editor, `format`); Sheets + office previews not started |
 | 10–13 | Python script runner, AI Routines, Google Calendar/Gmail, Drive | Not started |
 
 Off-roadmap work, deliberately unnumbered: [hardening & optimization](superpowers/plans/2026-08-05-hardening-optimization.md)

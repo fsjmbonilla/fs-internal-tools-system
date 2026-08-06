@@ -2,7 +2,7 @@ import { create as contentDisposition } from 'content-disposition';
 import { eq } from 'drizzle-orm';
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { docs, messages, tasks } from '../db/schema/index.js';
+import { docs, messages, notes, tasks } from '../db/schema/index.js';
 import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { getAttachment, INLINEABLE } from '../services/attachmentService.js';
@@ -12,7 +12,8 @@ import { getStorageDriver } from '../storage/index.js';
 
 export const filesRouter = Router();
 // User-only, matching uploadsRouter: a token cannot create attachments, so it has
-// no need to read them. (Note attachments have no branch below and 404 for everyone.)
+// no need to read them. This also keeps note attachments out of AI reach, which the
+// note branch below depends on — it authorizes an owner, and a token has no owner.
 filesRouter.use(requireAuth, requireUserAuth);
 
 function parseId(raw: string | string[]): number {
@@ -38,6 +39,14 @@ filesRouter.get('/:id', async (req, res) => {
   } else if (attachment.docId) {
     const [doc] = await db.select().from(docs).where(eq(docs.id, attachment.docId));
     visible = Boolean(doc && (await getVisibleProject(doc.projectId, userId, isAdmin)));
+  } else if (attachment.noteId) {
+    // The one place in the platform where an admin has *less* reach than the
+    // rules elsewhere would give them. A note is private to its owner, and an
+    // admin can already transfer a departing colleague's notes without reading
+    // them (see transferNotes) — that property is only true if the admin cannot
+    // read the note's files either. So `isAdmin` is deliberately not consulted.
+    const [note] = await db.select().from(notes).where(eq(notes.id, attachment.noteId));
+    visible = Boolean(note && note.userId === userId);
   }
   if (!visible) throw new AppError(404, 'not_found', 'Not found');
 

@@ -4,10 +4,13 @@ import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import {
+  addNoteAttachments,
   convertNoteToDoc,
   createNote,
   deleteNote,
   getOwnNote,
+  getOwnNoteWithAttachments,
+  isProseMirrorDoc,
   listNotes,
   updateNote,
 } from '../services/noteService.js';
@@ -40,10 +43,35 @@ notesRouter.get('/', validate(listQuery, 'query'), async (req, res) => {
   res.json({ notes });
 });
 
-const createBody = z.object({
-  title: z.string().min(1).max(200),
-  content: z.string().max(200000).optional(),
-});
+/**
+ * `rich` content must actually be a ProseMirror document.
+ *
+ * Without this, a client could store markdown — or anything at all — under
+ * `format: 'rich'`, and the editor would fail to load that note from then on
+ * with no way for the user to repair it. Rejecting at the edge keeps every row
+ * readable by the renderer its `format` names.
+ */
+function refineFormat(
+  value: { content?: string; format?: 'markdown' | 'rich' },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.format !== 'rich' || value.content === undefined) return;
+  if (!isProseMirrorDoc(value.content)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['content'],
+      message: 'rich content must be a ProseMirror document (JSON with type "doc")',
+    });
+  }
+}
+
+const createBody = z
+  .object({
+    title: z.string().min(1).max(200),
+    content: z.string().max(200000).optional(),
+    format: z.enum(['markdown', 'rich']).optional(),
+  })
+  .superRefine(refineFormat);
 
 notesRouter.post('/', validate(createBody), async (req, res) => {
   const note = await createNote(req.auth!.userId, req.valid as z.infer<typeof createBody>);
@@ -51,22 +79,41 @@ notesRouter.post('/', validate(createBody), async (req, res) => {
 });
 
 notesRouter.get('/:id', async (req, res) => {
-  const note = await getOwnNote(parseId(req.params.id), req.auth!.userId);
+  const note = await getOwnNoteWithAttachments(parseId(req.params.id), req.auth!.userId);
   if (!note) throw new AppError(404, 'not_found', 'Not found');
   res.json({ note });
 });
 
-const patchBody = z.object({
-  title: z.string().min(1).max(200).optional(),
-  content: z.string().max(200000).optional(),
-  pinned: z.boolean().optional(),
-});
+const patchBody = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    content: z.string().max(200000).optional(),
+    format: z.enum(['markdown', 'rich']).optional(),
+    pinned: z.boolean().optional(),
+  })
+  .superRefine(refineFormat);
 
 notesRouter.patch('/:id', validate(patchBody), async (req, res) => {
   const id = parseId(req.params.id);
   const ok = await updateNote(id, req.auth!.userId, req.valid as z.infer<typeof patchBody>);
   if (!ok) throw new AppError(404, 'not_found', 'Not found');
-  res.json({ note: await getOwnNote(id, req.auth!.userId) });
+  // With attachments, like GET — the editor re-renders from this response.
+  res.json({ note: await getOwnNoteWithAttachments(id, req.auth!.userId) });
+});
+
+const attachBody = z.object({ attachmentIds: z.array(z.number().int().positive()).min(1).max(10) });
+
+notesRouter.post('/:id/attachments', validate(attachBody), async (req, res) => {
+  const id = parseId(req.params.id);
+  // 404 before 400: an attachment failure must not confirm that someone else's
+  // note exists. The whole router is requireUserAuth, so there is no admin path
+  // in here either — a note's files answer to its owner and nobody else.
+  if (!(await getOwnNote(id, req.auth!.userId))) throw new AppError(404, 'not_found', 'Not found');
+  const { attachmentIds } = req.valid as z.infer<typeof attachBody>;
+  if (!(await addNoteAttachments(id, req.auth!.userId, attachmentIds))) {
+    throw new AppError(400, 'invalid_attachment', 'One or more attachments could not be linked');
+  }
+  res.status(201).json({ note: await getOwnNoteWithAttachments(id, req.auth!.userId) });
 });
 
 notesRouter.delete('/:id', async (req, res) => {

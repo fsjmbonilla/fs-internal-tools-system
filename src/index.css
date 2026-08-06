@@ -128,3 +128,59 @@
     @apply font-sans;
     }
 }
+/*
+ * Rich note content.
+ *
+ * Tailwind's preflight strips list markers, heading sizes and table borders, and
+ * the `prose` classes that would restore them need @tailwindcss/typography, which
+ * this project does not install. Rather than add a plugin for one editor, the few
+ * elements the note editor can produce are styled here — scoped to .fs-rich so
+ * nothing else in the app is affected.
+ */
+.fs-rich {
+    outline: none;
+}
+.fs-rich h1 { font-size: 1.5rem; font-weight: 600; margin: 0.6em 0 0.3em; }
+.fs-rich h2 { font-size: 1.25rem; font-weight: 600; margin: 0.6em 0 0.3em; }
+.fs-rich h3 { font-size: 1.1rem; font-weight: 600; margin: 0.6em 0 0.3em; }
+.fs-rich p { margin: 0.4em 0; }
+.fs-rich ul { list-style: disc; padding-left: 1.5rem; margin: 0.4em 0; }
+.fs-rich ol { list-style: decimal; padding-left: 1.5rem; margin: 0.4em 0; }
+.fs-rich li p { margin: 0.15em 0; }
+.fs-rich blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 0.75rem;
+    color: var(--muted-foreground);
+    margin: 0.5em 0;
+}
+.fs-rich pre {
+    background: var(--muted);
+    border-radius: 0.375rem;
+    padding: 0.6rem 0.8rem;
+    overflow-x: auto;
+    font-size: 0.85em;
+}
+.fs-rich code { font-family: ui-monospace, monospace; font-size: 0.9em; }
+.fs-rich a { color: var(--primary); text-decoration: underline; }
+.fs-rich img { max-width: 100%; height: auto; border-radius: 0.25rem; }
+.fs-rich table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.6em 0;
+    table-layout: fixed;
+}
+.fs-rich th,
+.fs-rich td {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.5rem;
+    vertical-align: top;
+}
+.fs-rich th { background: var(--muted); font-weight: 600; text-align: left; }
+/* ProseMirror's own selected-cell decoration. */
+.fs-rich .selectedCell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in oklab, var(--primary) 18%, transparent);
+    pointer-events: none;
+}
