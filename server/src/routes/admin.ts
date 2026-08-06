@@ -2,7 +2,9 @@ import { eq } from 'drizzle-orm';
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { users } from '../db/schema/index.js';
+import { channels, gmailIngestState, users } from '../db/schema/index.js';
+import { armMailboxPoller, stopMailboxPoller } from '../automations/mailboxPoller.js';
+import { getConnection } from '../services/googleService.js';
 import { requireAdmin, requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -201,5 +203,73 @@ adminRouter.delete('/tokens/:id', async (req, res) => {
   // existed, which is the honest answer to "is this token usable?".
   if (!(await revokeApiToken(id))) throw new AppError(404, 'not_found', 'Not found');
   logger.info({ actor: req.auth!.userId, tokenId: id }, 'service token revoked');
+  res.json({ ok: true });
+});
+
+// ─── Support mailbox binding (Phase 12) ──────────────────────────────────────
+
+adminRouter.get('/google/support-mailbox', async (_req, res) => {
+  const account = await getConnection('support_mailbox');
+  if (!account) {
+    res.json({ connected: false, email: null, broken: false, targetChannelId: null });
+    return;
+  }
+  const [state] = await db
+    .select()
+    .from(gmailIngestState)
+    .where(eq(gmailIngestState.googleAccountId, account.id));
+  res.json({
+    connected: true,
+    email: account.googleEmail,
+    broken: account.status === 'broken',
+    targetChannelId: state?.targetChannelId ?? null,
+  });
+});
+
+const mailboxBody = z.object({ targetChannelId: z.number().int().positive() });
+
+adminRouter.put('/google/support-mailbox', validate(mailboxBody), async (req, res) => {
+  const { targetChannelId } = req.valid as z.infer<typeof mailboxBody>;
+  const account = await getConnection('support_mailbox');
+  if (!account) {
+    throw new AppError(409, 'google_not_connected', 'Connect the support mailbox first');
+  }
+  const [channel] = await db.select().from(channels).where(eq(channels.id, targetChannelId));
+  if (!channel) throw new AppError(404, 'not_found', 'Not found');
+  if (channel.kind !== 'support') {
+    // Emails become intake fodder; aiming them at a standard channel would
+    // ingest without ever filing tickets — a config that looks alive but isn't.
+    throw new AppError(400, 'not_a_support_channel', 'Emails must land in a support channel');
+  }
+
+  const [existing] = await db
+    .select()
+    .from(gmailIngestState)
+    .where(eq(gmailIngestState.googleAccountId, account.id));
+  if (existing) {
+    await db
+      .update(gmailIngestState)
+      .set({ targetChannelId })
+      .where(eq(gmailIngestState.googleAccountId, account.id));
+  } else {
+    await db.insert(gmailIngestState).values({
+      googleAccountId: account.id,
+      targetChannelId,
+      // The watermark starts *now* (approximately — Gmail assigns its own
+      // internalDate): mail that predates the binding is history, not intake.
+      lastInternalDate: Date.now(),
+    });
+  }
+  await armMailboxPoller();
+  logger.info({ actor: req.auth!.userId, targetChannelId }, 'support mailbox bound');
+  res.json({ ok: true, targetChannelId });
+});
+
+adminRouter.delete('/google/support-mailbox', async (req, res) => {
+  const account = await getConnection('support_mailbox');
+  if (!account) throw new AppError(404, 'not_found', 'Not found');
+  await db.delete(gmailIngestState).where(eq(gmailIngestState.googleAccountId, account.id));
+  stopMailboxPoller();
+  logger.info({ actor: req.auth!.userId }, 'support mailbox unbound');
   res.json({ ok: true });
 });

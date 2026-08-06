@@ -2,6 +2,7 @@ import http from 'node:http';
 import { Server } from 'socket.io';
 import { createApp } from './app.js';
 import { registerAutomations } from './automations/index.js';
+import { armMailboxPoller } from './automations/mailboxPoller.js';
 import { config } from './config.js';
 import { pool } from './db/index.js';
 import { logger } from './logger.js';
@@ -50,6 +51,10 @@ ensureBotUser()
  * double-fires because the server came back up.
  */
 startScheduler().catch((err) => logger.error({ err }, 'could not start the routine scheduler'));
+
+// Same boot-time rebuild for the support-mailbox poller: armed only when a
+// mailbox connection and a channel binding both exist in the database.
+armMailboxPoller().catch((err) => logger.error({ err }, 'could not arm the mailbox poller'));
 
 const GC_INTERVAL_MS = 60 * 60 * 1000;
 const gcTimer = setInterval(() => {

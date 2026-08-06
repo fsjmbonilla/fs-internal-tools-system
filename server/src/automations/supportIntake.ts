@@ -21,8 +21,12 @@ const inFlight = new Set<number>();
 
 export function registerSupportIntake(): void {
   events.on('message.created', (payload: MessageCreatedEvent) => {
-    // Bot messages must never re-trigger the AI, or the bot talks to itself forever.
-    if (payload.message.isBot) return;
+    // Bot messages must never re-trigger the AI, or the bot talks to itself
+    // forever — except the ones the mailbox poller ingested (origin 'email'):
+    // those are bot-authored only as a byline, and an emailed problem still
+    // deserves triage. No loop reopens here, because the bot's own replies are
+    // never email-ingested and so never carry the origin.
+    if (payload.message.isBot && payload.message.origin !== 'email') return;
     if (payload.channel.kind !== 'support') return;
 
     const channelId = payload.channel.id;
@@ -56,7 +60,14 @@ async function handleSupportMessage(payload: MessageCreatedEvent): Promise<void>
   // Belt-and-braces against the bot answering itself: payload.message.isBot is the
   // primary guard, but it depends on users.is_bot being true, which a manual
   // UPDATE or a pre-existing account at that address could silently undo.
-  if (botUserId !== null && payload.message.userId === botUserId) return;
+  // Email-ingested messages get the same exemption here as at the event guard.
+  if (
+    botUserId !== null &&
+    payload.message.userId === botUserId &&
+    payload.message.origin !== 'email'
+  ) {
+    return;
+  }
   if (botUserId === null) {
     logger.warn('supportIntake: no bot user seeded — run `npm run seed:bot`');
     return;

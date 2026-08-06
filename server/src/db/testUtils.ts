@@ -1,5 +1,6 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { stopMailboxPoller } from '../automations/mailboxPoller.js';
 import { config } from '../config.js';
 import { resetTokenTouchState } from '../services/apiTokenService.js';
 import { stopAllRoutines } from '../services/routineScheduler.js';
@@ -59,6 +60,8 @@ export async function resetDb(): Promise<void> {
   // reuses — a stale lock would silently make the next test's sheet read-only.
   resetLocks();
   // Cron timers outlive a truncation too — a routine armed by one suite would
-  // keep firing against the next suite's data.
+  // keep firing against the next suite's data. The mailbox poller is the same
+  // kind of timer with the same failure mode.
   stopAllRoutines();
+  stopMailboxPoller();
 }

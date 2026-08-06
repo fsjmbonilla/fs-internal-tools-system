@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { stopMailboxPoller } from '../automations/mailboxPoller.js';
 import { config } from '../config.js';
 import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -76,5 +77,8 @@ googleRouter.delete('/connection', async (req, res) => {
   const kind = parseKind(req, req.auth!.role);
   const removed = await disconnect(kind, req.auth!.userId);
   if (!removed) throw new AppError(404, 'not_found', 'Not found');
+  // Deleting the mailbox connection cascades away its ingest state; the timer
+  // is process memory and has to be told.
+  if (kind === 'support_mailbox') stopMailboxPoller();
   res.json({ ok: true });
 });

@@ -117,6 +117,7 @@ export async function sendMessage(
   userId: number,
   body: string,
   attachmentIds?: number[],
+  opts?: { origin?: 'email' },
 ): Promise<MessageWithAuthor> {
   const [{ id }] = await db.insert(messages).values({ channelId, userId, body }).$returningId();
   for (const attachmentId of attachmentIds ?? []) {
@@ -151,6 +152,7 @@ export async function sendMessage(
       body,
       mentionedUserIds,
       isBot: row.isBot,
+      ...(opts?.origin ? { origin: opts.origin } : {}),
     },
     channel: { id: channel.id, type: channel.type, kind: channel.kind, isPrivate: channel.isPrivate },
   });

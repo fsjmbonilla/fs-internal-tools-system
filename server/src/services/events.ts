@@ -10,6 +10,14 @@ export interface MessageCreatedEvent {
     body: string;
     mentionedUserIds: number[];
     isBot: boolean;
+    /**
+     * 'email' marks a message the mailbox poller ingested. It matters because
+     * such messages are authored by the bot, and the intake automation's
+     * bot-guard must wave exactly these through: an emailed problem still
+     * deserves a ticket, while the bot's own replies (no origin) never
+     * re-trigger anything.
+     */
+    origin?: 'email';
   };
   channel: {
     id: number;
