@@ -8,6 +8,7 @@ import { resetLocks } from '../services/sheetService.js';
 import { pool } from './index.js';
 
 const TABLES = [
+  'project_drive_folders',
   'message_email_origins',
   'gmail_ingest_state',
   'google_accounts',

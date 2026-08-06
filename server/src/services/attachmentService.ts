@@ -182,6 +182,9 @@ export async function deleteAttachmentObjectsFor(target: {
   const driver = getStorageDriver();
   let deleted = 0;
   for (const row of rows) {
+    // A gdrive attachment is a reference — no stored object, and the Drive
+    // file itself is emphatically not ours to delete.
+    if (row.storageKey === null) continue;
     try {
       await driver.delete(row.storageKey);
       deleted++;
@@ -238,7 +241,8 @@ export async function gcUnlinkedAttachments(olderThanHours: number): Promise<num
       ),
     );
   for (const row of stale) {
-    await getStorageDriver().delete(row.storageKey);
+    // gdrive rows have no object; the row itself is still garbage if unlinked.
+    if (row.storageKey !== null) await getStorageDriver().delete(row.storageKey);
     await db.delete(attachments).where(eq(attachments.id, row.id));
   }
   return stale.length;

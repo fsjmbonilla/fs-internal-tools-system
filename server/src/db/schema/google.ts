@@ -10,6 +10,7 @@ import {
 } from 'drizzle-orm/mysql-core';
 import { users } from './auth.js';
 import { channels, messages } from './chat.js';
+import { projects } from './projects.js';
 
 // Drizzle's own `varbinary` types the column as string, but mysql2 hands
 // VARBINARY back as a Buffer — this keeps the TS type honest.
@@ -83,6 +84,23 @@ export const gmailIngestState = mysqlTable('gmail_ingest_state', {
  * inserting the same gmail_message_id twice fails, and the poller treats that
  * as "already ingested", not as an error.
  */
+/**
+ * A project's bound Drive folder — ids only, never tokens. Browsing and
+ * uploading always happen with the *acting user's* connection; the binding
+ * just says where the project's files live in Drive.
+ */
+export const projectDriveFolders = mysqlTable('project_drive_folders', {
+  projectId: bigint('project_id', { mode: 'number', unsigned: true })
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  folderId: varchar('folder_id', { length: 120 }).notNull(),
+  folderName: varchar('folder_name', { length: 300 }).notNull(),
+  connectedBy: bigint('connected_by', { mode: 'number', unsigned: true })
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  connectedAt: timestamp('connected_at').notNull().defaultNow(),
+});
+
 export const messageEmailOrigins = mysqlTable(
   'message_email_origins',
   {

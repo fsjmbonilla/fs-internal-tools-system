@@ -50,6 +50,15 @@ filesRouter.get('/:id', async (req, res) => {
   }
   if (!visible) throw new AppError(404, 'not_found', 'Not found');
 
+  // A gdrive attachment has no bytes here — the browser belongs in Drive. The
+  // visibility check above still ran: whether this chip exists for you is our
+  // rule; whether Google lets you open the file is Google's.
+  if (attachment.storageKey === null) {
+    if (!attachment.webViewLink) throw new AppError(404, 'not_found', 'Not found');
+    res.redirect(attachment.webViewLink);
+    return;
+  }
+
   const driver = getStorageDriver();
   const signedUrl = await driver.getSignedGetUrl(attachment.storageKey, 60);
   if (signedUrl) {
