@@ -51,9 +51,17 @@ export function Sidebar() {
         <Link to="/projects" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
           Projects
         </Link>
-        <Link to="/notes" className="mb-4 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
+        <Link to="/notes" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
           Notes
         </Link>
+        {/* Admin-only, matching the route and the API — a non-admin gets 404 on
+            every scripts endpoint, so showing the link would only mislead. */}
+        {user?.role === 'admin' && (
+          <Link to="/scripts" className="mb-4 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
+            Scripts
+          </Link>
+        )}
+        {user?.role !== 'admin' && <div className="mb-4" />}
         <SidebarSection
           title="Channels"
           action={

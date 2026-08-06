@@ -29,6 +29,11 @@ const DocPage = lazy(() => import('@/features/docs/DocPage').then((m) => ({ defa
 const NotesPage = lazy(() =>
   import('@/features/notes/NotesPage').then((m) => ({ default: m.NotesPage })),
 );
+// Admin-only, and heavy for what it is (a code editor), so it stays behind its
+// own chunk like every other feature.
+const ScriptsPage = lazy(() =>
+  import('@/features/scripts/ScriptsPage').then((m) => ({ default: m.ScriptsPage })),
+);
 const AdminPage = lazy(() =>
   import('@/features/admin/AdminPage').then((m) => ({ default: m.AdminPage })),
 );
@@ -89,7 +94,10 @@ export const router = createBrowserRouter([
           { path: '/notes', element: <NotesPage /> },
           {
             element: <RequireAdmin />,
-            children: [{ path: '/admin', element: <AdminPage /> }],
+            children: [
+              { path: '/admin', element: <AdminPage /> },
+              { path: '/scripts', element: <ScriptsPage /> },
+            ],
           },
         ],
       },
