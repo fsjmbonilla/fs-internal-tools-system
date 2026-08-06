@@ -15,6 +15,8 @@ import { channelsRouter, messagesRouter, searchRouter } from './routes/channels.
 import { departmentsRouter } from './routes/departments.js';
 import { dmsRouter } from './routes/dms.js';
 import { filesRouter } from './routes/files.js';
+import { calendarRouter } from './routes/calendar.js';
+import { gmailRouter } from './routes/gmail.js';
 import { googleRouter } from './routes/google.js';
 import { healthRouter } from './routes/health.js';
 import { notesRouter } from './routes/notes.js';
@@ -113,6 +115,8 @@ export function createApp(): express.Express {
   app.use('/api/uploads', uploadsRouter);
   app.use('/api/files', filesRouter);
   app.use('/api/google', googleRouter);
+  app.use('/api/calendar', calendarRouter);
+  app.use('/api/gmail', gmailRouter);
   // Not under /api: an MCP endpoint is addressed by client config, not by the SPA.
   app.use('/mcp', mcpRouter);
 
