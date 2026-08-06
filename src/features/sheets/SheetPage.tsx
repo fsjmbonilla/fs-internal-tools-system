@@ -5,6 +5,7 @@ import { useAuthStore } from '@/features/auth/authStore';
 import { getSocket } from '@/lib/socket';
 import { getSheet, saveSheet, type SheetLock } from './api';
 import { mountUniver, type UniverHandle } from './univer';
+import { hasMacros, snapshotToXlsx, xlsxToSnapshot } from './xlsx';
 
 /**
  * One spreadsheet, with lock-based single-editor concurrency.
@@ -30,6 +31,7 @@ export function SheetPage() {
   const univerRef = useRef<UniverHandle | null>(null);
   const dirtyRef = useRef(false);
   const savingRef = useRef(false);
+  const importRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState('');
   const [lock, setLock] = useState<SheetLock | null>(null);
@@ -146,6 +148,40 @@ export function SheetPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Replace the workbook from an uploaded .xlsx/.xlsm, then save it. */
+  async function importXlsx(file: File) {
+    if (!univerRef.current) return;
+    setMessage(null);
+    try {
+      const snapshot = xlsxToSnapshot(await file.arrayBuffer(), file.name.replace(/\.[^.]+$/, ''));
+      univerRef.current.load(JSON.stringify(snapshot));
+      dirtyRef.current = true;
+      await save('manual');
+      // Stated rather than silent: the data and formulas arrived, the macros did
+      // not, and every web spreadsheet behaves this way — Google's included.
+      if (hasMacros(file.name)) {
+        setMessage('Imported. Macros (VBA) were not imported — no web spreadsheet can run them.');
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Could not read that spreadsheet');
+    }
+  }
+
+  function exportXlsx() {
+    if (!univerRef.current) return;
+    try {
+      const blob = snapshotToXlsx(JSON.parse(univerRef.current.snapshot() || '{}'));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${title || 'sheet'}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Could not export that sheet');
+    }
+  }
+
   function takeLock() {
     socket.emit('sheet:lock:acquire', sheetId, (res: { ok: boolean; lock?: SheetLock }) => {
       if (res.ok && res.lock) setLock(res.lock);
@@ -172,6 +208,32 @@ export function SheetPage() {
         {savedAt && iAmEditing && (
           <span className="text-xs text-muted-foreground">Saved {savedAt}</span>
         )}
+
+        <Button size="sm" variant="outline" onClick={exportXlsx}>
+          Export .xlsx
+        </Button>
+        {iAmEditing && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => importRef.current?.click()}
+            title="Replaces the whole workbook"
+          >
+            Import .xlsx
+          </Button>
+        )}
+        <input
+          ref={importRef}
+          type="file"
+          accept=".xlsx,.xlsm,.csv"
+          className="hidden"
+          aria-label="Import spreadsheet"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void importXlsx(file);
+          }}
+        />
 
         {iAmEditing ? (
           <>
