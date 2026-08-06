@@ -32,6 +32,15 @@ const NotesPage = lazy(() =>
 const AdminPage = lazy(() =>
   import('@/features/admin/AdminPage').then((m) => ({ default: m.AdminPage })),
 );
+// Univer is a whole spreadsheet engine — formula evaluation, a canvas renderer,
+// the lot. Lazy like the rest, and worth being deliberate about: loading it on
+// the chat route would make every page pay for a feature most sessions never open.
+const SheetPage = lazy(() =>
+  import('@/features/sheets/SheetPage').then((m) => ({ default: m.SheetPage })),
+);
+const SheetListPage = lazy(() =>
+  import('@/features/sheets/SheetListPage').then((m) => ({ default: m.SheetListPage })),
+);
 // The heaviest chunk in the app — livekit-client ships a whole WebRTC stack, and
 // it is only needed once someone is actually in a call.
 const CallPage = lazy(() =>
@@ -75,6 +84,8 @@ export const router = createBrowserRouter([
           { path: '/projects/:projectId', element: <ProjectBoardPage /> },
           { path: '/projects/:projectId/docs', element: <DocListPage /> },
           { path: '/projects/:projectId/docs/:docId', element: <DocPage /> },
+          { path: '/projects/:projectId/sheets', element: <SheetListPage /> },
+          { path: '/sheets/:sheetId', element: <SheetPage /> },
           { path: '/notes', element: <NotesPage /> },
           {
             element: <RequireAdmin />,
