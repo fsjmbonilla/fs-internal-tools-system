@@ -5,12 +5,12 @@ import { db } from '../db/index.js';
 import { routineRuns, routines } from '../db/schema/index.js';
 import { logger } from '../logger.js';
 import { recordAiUsage } from './aiBudgetService.js';
-import { channelForWriting, projectForReading, projectForWriting, type AgentCaller } from './agentAuth.js';
+import { channelForWriting, type AgentCaller } from './agentAuth.js';
+// The tools are shared with the MCP endpoint, defined once in agentTools.
+import { isRefusal, jsonSchemaFor, toolsForScopes } from './agentTools.js';
 import { getBotUserId } from './botService.js';
 import { findOrCreateDm } from './channelService.js';
 import { sendMessage } from './messageService.js';
-import { getBoard, createTask } from './taskService.js';
-import { getSheet, listSheets } from './sheetService.js';
 
 export type RoutineRow = typeof routines.$inferSelect;
 export type RoutineRunRow = typeof routineRuns.$inferSelect;
@@ -37,123 +37,6 @@ const MAX_ITERATIONS = 8;
 const MAX_TOKENS_PER_RUN = 60_000;
 const MODEL = 'claude-opus-5';
 const MAX_TOKENS_PER_TURN = 4096;
-
-interface ToolDef {
-  scope: string;
-  name: string;
-  description: string;
-  input_schema: Anthropic.Tool.InputSchema;
-  run: (input: Record<string, unknown>, caller: AgentCaller) => Promise<unknown>;
-}
-
-const NOT_FOUND = { error: 'Not found, or not visible to this routine.' };
-
-/**
- * The tools a routine may use.
- *
- * Deliberately a smaller set than the MCP endpoint's: a routine runs unattended,
- * so it gets the verbs that are useful on a schedule and none of the destructive
- * ones. There is no notes tool and there never will be — notes are private to
- * their owner and unreachable by anything automated.
- */
-const TOOLS: ToolDef[] = [
-  {
-    scope: 'tickets:read',
-    name: 'list_tickets',
-    description: 'List the board columns and tickets of a project.',
-    input_schema: {
-      type: 'object',
-      properties: { projectId: { type: 'number' } },
-      required: ['projectId'],
-    },
-    run: async (input, caller) => {
-      const projectId = Number(input.projectId);
-      if (!(await projectForReading(projectId, caller))) return NOT_FOUND;
-      return getBoard(projectId);
-    },
-  },
-  {
-    scope: 'tickets:write',
-    name: 'create_ticket',
-    description: 'Create a ticket in a project column.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectId: { type: 'number' },
-        columnId: { type: 'number' },
-        title: { type: 'string' },
-        description: { type: 'string' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
-      },
-      required: ['projectId', 'columnId', 'title'],
-    },
-    run: async (input, caller) => {
-      const projectId = Number(input.projectId);
-      const columnId = Number(input.columnId);
-      if (!(await projectForWriting(projectId, caller))) return NOT_FOUND;
-      // The column must belong to the project the caller was authorized for, or
-      // the id becomes a way to write into a project it never named.
-      const board = await getBoard(projectId);
-      if (!board.columns.some((c) => c.id === columnId)) {
-        return { error: 'That column does not belong to that project.' };
-      }
-      return createTask({
-        projectId,
-        columnId,
-        title: String(input.title),
-        description: input.description ? String(input.description) : undefined,
-        priority: input.priority as 'low' | 'medium' | 'high' | 'urgent' | undefined,
-        createdBy: caller.userId,
-      });
-    },
-  },
-  {
-    scope: 'chat:write',
-    name: 'post_message',
-    description: 'Post a message to a channel the routine can write to.',
-    input_schema: {
-      type: 'object',
-      properties: { channelId: { type: 'number' }, body: { type: 'string' } },
-      required: ['channelId', 'body'],
-    },
-    run: async (input, caller) => {
-      const channelId = Number(input.channelId);
-      if (!(await channelForWriting(channelId, caller))) return NOT_FOUND;
-      const message = await sendMessage(channelId, caller.userId, String(input.body));
-      return { id: message.id };
-    },
-  },
-  {
-    scope: 'sheets:read',
-    name: 'list_sheets',
-    description: 'List the spreadsheets in a project.',
-    input_schema: {
-      type: 'object',
-      properties: { projectId: { type: 'number' } },
-      required: ['projectId'],
-    },
-    run: async (input, caller) => {
-      const projectId = Number(input.projectId);
-      if (!(await projectForReading(projectId, caller))) return NOT_FOUND;
-      return { sheets: await listSheets(projectId) };
-    },
-  },
-  {
-    scope: 'sheets:read',
-    name: 'read_sheet',
-    description: 'Read one spreadsheet, including its workbook snapshot.',
-    input_schema: {
-      type: 'object',
-      properties: { sheetId: { type: 'number' } },
-      required: ['sheetId'],
-    },
-    run: async (input, caller) => {
-      const sheet = await getSheet(Number(input.sheetId));
-      if (!sheet || !(await projectForReading(sheet.projectId, caller))) return NOT_FOUND;
-      return sheet;
-    },
-  },
-];
 
 let client: Anthropic | null | undefined;
 
@@ -227,7 +110,10 @@ export async function runRoutine(
   // attributable to an automation, and it must not inherit a person's memberships.
   const caller: AgentCaller = { userId: botUserId, isAdmin: false };
 
-  const tools = TOOLS.filter((t) => routine.scopes.includes(t.scope));
+  // Unattended-only: a routine runs with nobody watching, so it is offered the
+  // verbs that make sense on a schedule rather than the full agent surface an
+  // MCP client (which has a person driving it) receives.
+  const tools = toolsForScopes(routine.scopes, { unattendedOnly: true });
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: routine.prompt }];
 
   try {
@@ -243,10 +129,12 @@ export async function runRoutine(
         model: config.AI_MODEL || MODEL,
         max_tokens: MAX_TOKENS_PER_TURN,
         system: systemPrompt(routine),
-        tools: tools.map(({ name, description, input_schema }) => ({
-          name,
-          description,
-          input_schema,
+        tools: tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          // Derived from the same zod shape the MCP endpoint registers, so the
+          // two surfaces cannot describe the same tool differently.
+          input_schema: jsonSchemaFor(t) as Anthropic.Tool.InputSchema,
         })),
         messages,
       });
@@ -288,7 +176,9 @@ export async function runRoutine(
           output = { error: `No tool named ${use.name} is available to this routine.` };
         } else {
           try {
-            output = await tool.run(use.input as Record<string, unknown>, caller);
+            const result = await tool.handler(use.input as never, caller);
+            // A refusal is a result the model should reason about, not a crash.
+            output = isRefusal(result) ? { error: result.refusal } : result;
           } catch (err) {
             output = { error: err instanceof Error ? err.message : 'The tool failed' };
           }

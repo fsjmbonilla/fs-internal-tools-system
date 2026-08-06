@@ -28,30 +28,9 @@ import { requireAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { logger } from '../logger.js';
 import type { Scope } from '../services/apiTokenService.js';
-import { getVisibleChannel, isChannelMember, listVisibleChannels } from '../services/channelService.js';
-import { createDoc, getDoc, getDocWithAttachments, listDocs, updateDoc } from '../services/docService.js';
-import { searchMessages, sendMessage } from '../services/messageService.js';
-import { listVisibleProjects } from '../services/projectService.js';
+// The tools themselves — shared with AI Routines, defined exactly once.
+import { AGENT_TOOLS, isRefusal } from '../services/agentTools.js';
 // Shared with AI routines: one place decides what an agent may reach.
-import { projectForReading, projectForWriting } from '../services/agentAuth.js';
-import {
-  canWrite,
-  createSheet,
-  getLock,
-  getSheet,
-  getSheetSummary,
-  isWorkbookSnapshot,
-  listSheets,
-  updateSheet,
-} from '../services/sheetService.js';
-import { getIo } from '../sockets/registry.js';
-import {
-  createTask,
-  getBoard,
-  getTaskById,
-  moveTask,
-  updateTask,
-} from '../services/taskService.js';
 
 /** What every tool handler is given: who is calling, and what they may do. */
 interface Caller {
@@ -96,277 +75,30 @@ export function buildMcpServer(caller: Caller): McpServer {
   const server = new McpServer({ name: 'fs-internal-tools', version: '1.0.0' });
   const has = (scope: Scope) => caller.scopes.includes(scope);
 
-  /** Register only if the token holds the scope; check it again at call time. */
-  function tool<Shape extends z.ZodRawShape>(
-    scope: Scope,
-    name: string,
-    description: string,
-    shape: Shape,
-    handler: (input: z.infer<z.ZodObject<Shape>>) => Promise<ToolResult>,
-  ) {
-    if (!has(scope)) return;
-    const inputSchema = z.object(shape);
-    server.registerTool(name, { description, inputSchema }, async (input) => {
-      // Belt and braces. The list was filtered by scope, but the check that
-      // matters is the one on the path that does the work.
-      if (!has(scope)) return refuse(`This token lacks the ${scope} scope.`);
-      return handler(input);
-    });
+  /**
+   * Register every shared tool this token holds the scope for.
+   *
+   * The tools themselves live in `services/agentTools.ts` because AI Routines
+   * offer the same verbs, and a tool defined in two places is a tool whose two
+   * definitions will eventually disagree. This layer does one job: translate a
+   * shared tool into what the MCP SDK wants, and turn a refusal into an MCP
+   * error result.
+   */
+  for (const definition of AGENT_TOOLS) {
+    if (!has(definition.scope)) continue;
+    const inputSchema = z.object(definition.shape);
+    server.registerTool(
+      definition.name,
+      { description: definition.description, inputSchema },
+      async (input) => {
+        // Belt and braces. The list was filtered by scope, but the check that
+        // matters is the one on the path that does the work.
+        if (!has(definition.scope)) return refuse(`This token lacks the ${definition.scope} scope.`);
+        const result = await definition.handler(input as never, caller);
+        return isRefusal(result) ? refuse(result.refusal) : ok(result);
+      },
+    );
   }
-
-  // ─── Tickets ────────────────────────────────────────────────────────────────
-
-  tool(
-    'tickets:read',
-    'list_projects',
-    'List the projects this token can see. Use the returned id with list_tickets.',
-    {},
-    async () => ok({ projects: await listVisibleProjects(caller.userId, caller.isAdmin) }),
-  );
-
-  tool(
-    'tickets:read',
-    'list_tickets',
-    'List the board columns and tickets of a project.',
-    { projectId: z.number().int().positive() },
-    async ({ projectId }) => {
-      if (!(await projectForReading(projectId, caller))) return refuse(NOT_FOUND);
-      return ok(await getBoard(projectId));
-    },
-  );
-
-  tool(
-    'tickets:read',
-    'get_ticket',
-    'Read one ticket by id.',
-    { ticketId: z.number().int().positive() },
-    async ({ ticketId }) => {
-      const task = await getTaskById(ticketId);
-      if (!task || !(await projectForReading(task.projectId, caller))) return refuse(NOT_FOUND);
-      return ok(task);
-    },
-  );
-
-  tool(
-    'tickets:write',
-    'create_ticket',
-    'Create a ticket in a project column. Attributed to this token\'s bot user.',
-    {
-      projectId: z.number().int().positive(),
-      columnId: z.number().int().positive(),
-      title: z.string().min(1).max(300),
-      description: z.string().max(10000).optional(),
-      priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
-    },
-    async (input) => {
-      if (!(await projectForWriting(input.projectId, caller))) return refuse(NOT_FOUND);
-      // The column has to belong to the project the caller was authorized for,
-      // or the id becomes a way to write into a project it never named.
-      const board = await getBoard(input.projectId);
-      if (!board.columns.some((c) => c.id === input.columnId)) {
-        return refuse('That column does not belong to that project.');
-      }
-      const task = await createTask({ ...input, createdBy: caller.userId });
-      return ok(task);
-    },
-  );
-
-  tool(
-    'tickets:write',
-    'update_ticket',
-    'Change a ticket\'s title, description, assignee, or due date.',
-    {
-      ticketId: z.number().int().positive(),
-      title: z.string().min(1).max(300).optional(),
-      description: z.string().max(10000).nullable().optional(),
-      assigneeId: z.number().int().positive().nullable().optional(),
-      dueDate: z.string().date().nullable().optional(),
-    },
-    async ({ ticketId, ...patch }) => {
-      const task = await getTaskById(ticketId);
-      if (!task || !(await projectForWriting(task.projectId, caller))) return refuse(NOT_FOUND);
-      return ok(await updateTask(ticketId, patch));
-    },
-  );
-
-  tool(
-    'tickets:write',
-    'move_ticket_status',
-    'Move a ticket to another column. Announces the change in the channel the ticket came from, exactly as a person moving it would.',
-    {
-      ticketId: z.number().int().positive(),
-      columnId: z.number().int().positive(),
-    },
-    async ({ ticketId, columnId }) => {
-      const task = await getTaskById(ticketId);
-      if (!task || !(await projectForWriting(task.projectId, caller))) return refuse(NOT_FOUND);
-      const board = await getBoard(task.projectId);
-      if (!board.columns.some((c) => c.id === columnId)) {
-        return refuse('That column does not belong to that ticket\'s project.');
-      }
-      // moveTask owns the origin-channel announcement. Calling it — rather than
-      // reimplementing the move — is what makes an agent's move indistinguishable
-      // from a person's to everyone watching the channel.
-      await moveTask(ticketId, columnId, undefined, undefined, caller.userId);
-      return ok(await getTaskById(ticketId));
-    },
-  );
-
-  // ─── Chat ───────────────────────────────────────────────────────────────────
-
-  tool(
-    'chat:read',
-    'list_channels',
-    'List the channels this token can see.',
-    {},
-    async () => ok({ channels: await listVisibleChannels(caller.userId, caller.isAdmin) }),
-  );
-
-  tool(
-    'chat:read',
-    'search_messages',
-    'Full-text search across visible channels.',
-    {
-      query: z.string().min(1).max(200),
-      channelId: z.number().int().positive().optional(),
-    },
-    async ({ query, channelId }) =>
-      ok({ messages: await searchMessages(caller.userId, caller.isAdmin, query, channelId) }),
-  );
-
-  tool(
-    'chat:write',
-    'post_message',
-    'Post a message to a channel this token is a member of.',
-    {
-      channelId: z.number().int().positive(),
-      body: z.string().min(1).max(4000),
-    },
-    async ({ channelId, body }) => {
-      if (!(await getVisibleChannel(channelId, caller.userId, caller.isAdmin))) {
-        return refuse(NOT_FOUND);
-      }
-      // Membership, not just visibility: posting into a public channel it never
-      // joined would let an agent talk anywhere it can see.
-      if (!caller.isAdmin && !(await isChannelMember(channelId, caller.userId))) {
-        return refuse(NOT_FOUND);
-      }
-      return ok(await sendMessage(channelId, caller.userId, body));
-    },
-  );
-
-  // ─── Docs ───────────────────────────────────────────────────────────────────
-
-  tool(
-    'docs:read',
-    'list_docs',
-    'List the documents in a project.',
-    { projectId: z.number().int().positive() },
-    async ({ projectId }) => {
-      if (!(await projectForReading(projectId, caller))) return refuse(NOT_FOUND);
-      return ok({ docs: await listDocs(projectId) });
-    },
-  );
-
-  tool(
-    'docs:read',
-    'read_doc',
-    'Read one document by id.',
-    { docId: z.number().int().positive() },
-    async ({ docId }) => {
-      const doc = await getDoc(docId);
-      if (!doc || !(await projectForReading(doc.projectId, caller))) return refuse(NOT_FOUND);
-      return ok(await getDocWithAttachments(docId));
-    },
-  );
-
-  tool(
-    'docs:write',
-    'write_doc',
-    'Create a document in a project, or replace the title/content of an existing one.',
-    {
-      projectId: z.number().int().positive().optional(),
-      docId: z.number().int().positive().optional(),
-      title: z.string().min(1).max(200).optional(),
-      content: z.string().max(200000).optional(),
-    },
-    async ({ projectId, docId, title, content }) => {
-      if (docId) {
-        const doc = await getDoc(docId);
-        if (!doc || !(await projectForWriting(doc.projectId, caller))) return refuse(NOT_FOUND);
-        await updateDoc(docId, { title, content }, caller.userId);
-        return ok(await getDocWithAttachments(docId));
-      }
-      if (!projectId || !title) {
-        return refuse('Creating a document needs projectId and title; updating one needs docId.');
-      }
-      if (!(await projectForWriting(projectId, caller))) return refuse(NOT_FOUND);
-      return ok(await createDoc({ projectId, title, content, userId: caller.userId }));
-    },
-  );
-
-  // ─── Sheets ─────────────────────────────────────────────────────────────────
-
-  tool(
-    'sheets:read',
-    'list_sheets',
-    'List the spreadsheets in a project.',
-    { projectId: z.number().int().positive() },
-    async ({ projectId }) => {
-      if (!(await projectForReading(projectId, caller))) return refuse(NOT_FOUND);
-      return ok({ sheets: await listSheets(projectId) });
-    },
-  );
-
-  tool(
-    'sheets:read',
-    'read_sheet',
-    'Read one spreadsheet by id, including its workbook snapshot.',
-    { sheetId: z.number().int().positive() },
-    async ({ sheetId }) => {
-      const sheet = await getSheet(sheetId);
-      if (!sheet || !(await projectForReading(sheet.projectId, caller))) return refuse(NOT_FOUND);
-      return ok(sheet);
-    },
-  );
-
-  tool(
-    'sheets:write',
-    'write_sheet',
-    'Create a spreadsheet in a project, or replace an existing one\'s title/workbook snapshot.',
-    {
-      projectId: z.number().int().positive().optional(),
-      sheetId: z.number().int().positive().optional(),
-      title: z.string().min(1).max(200).optional(),
-      data: z.string().max(24_000_000).optional(),
-    },
-    async ({ projectId, sheetId, title, data }) => {
-      if (data !== undefined && !isWorkbookSnapshot(data)) {
-        return refuse('data must be a workbook snapshot (a JSON object).');
-      }
-      if (sheetId) {
-        const sheet = await getSheetSummary(sheetId);
-        if (!sheet || !(await projectForWriting(sheet.projectId, caller))) return refuse(NOT_FOUND);
-        // An agent respects the edit lock like anyone else. Without this an
-        // automation could overwrite whatever a person was in the middle of
-        // typing, which is the one thing the lock exists to prevent.
-        if (!canWrite(sheetId, caller.userId)) {
-          const lock = getLock(sheetId);
-          return refuse(`${lock?.displayName ?? 'Someone else'} is editing that sheet right now.`);
-        }
-        const updated = await updateSheet(sheetId, caller.userId, { title, data });
-        if (!updated) return refuse(NOT_FOUND);
-        getIo()?.to(`sheet:${sheetId}`).emit('sheet:updated', { sheetId, updatedBy: caller.userId });
-        return ok({ ...updated, data: undefined });
-      }
-      if (!projectId || !title) {
-        return refuse('Creating a sheet needs projectId and title; updating one needs sheetId.');
-      }
-      if (!(await projectForWriting(projectId, caller))) return refuse(NOT_FOUND);
-      const created = await createSheet({ projectId, title, data, userId: caller.userId });
-      return ok({ ...created, data: undefined });
-    },
-  );
 
   return server;
 }

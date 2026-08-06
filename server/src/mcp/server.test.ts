@@ -304,7 +304,10 @@ describe('the tools call the same services the REST routes call', () => {
     });
     const result = await callTool(token, 'list_tickets', { projectId: secret.id });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toBe('Not found, or not visible to this token.');
+    // "caller" rather than "token": the message is shared with AI Routines now,
+    // which are not tokens. The refusal itself is unchanged — still no hint that
+    // the project exists.
+    expect(result.content[0].text).toBe('Not found, or not visible to this caller.');
 
     const projects = parsed(await callTool(token, 'list_projects'));
     expect(projects.projects.map((p: { name: string }) => p.name)).not.toContain('Payroll');

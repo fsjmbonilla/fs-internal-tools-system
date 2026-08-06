@@ -17,7 +17,7 @@ scope and order.
 | `src/` | SPA. `features/<area>/` per domain (chat, kanban, docs, notes, admin, calls, files), `components/ui/` is shadcn. |
 | `server/src/routes/` | HTTP surface. One file per area; every router carries an explicit auth gate. |
 | `server/src/services/` | All business logic. Routes validate and delegate; services never import express. A service that may need to join a caller's transaction takes a trailing `exec: Executor = db` (from `db/index.ts`) and uses it for every query — see `createChannel` / `upsertSupportConfig`. |
-| `server/src/mcp/` | The MCP endpoint. Thin wrappers over services — no business logic here, ever. |
+| `server/src/mcp/` | The MCP endpoint. A thin adapter over `services/agentTools.ts` — no business logic here, ever. |
 | `server/src/automations/` | Event-bus listeners (support intake, ticket-status announcements). Registered in `index.ts` at boot, **not** in `createApp()`. |
 | `runner/` | The script sandbox — a **separate service**, and the only thing that executes user-written code. No database credentials; talks to the API over `RUNNER_TOKEN` and, in production, has no other egress. |
 | `server/drizzle/` | Migrations. Rename generated files to describe them (`0011_api_tokens.sql`) and update `meta/_journal.json` to match. |
@@ -66,9 +66,12 @@ quotes) and produces thousands of lines of noise. This has already happened once
    triage writes an `ai_usage` row with its token counts, and `checkAiBudget()` gates the
    next one (`AI_MIN_INTERVAL_MS` per channel, `AI_DAILY_CALL_CAP` per day). Any future
    paid AI call — routines, the script runner — belongs behind the same gate.
-8. **Agent authorization lives in one place — `services/agentAuth.ts`.** The MCP
-   endpoint and AI routines both call it. A second agent surface reimplementing
-   "visible, then member" is exactly how the two would drift apart.
+8. **Agent tools are defined once — `services/agentTools.ts`**, with their
+   authorization in `services/agentAuth.ts`. The MCP endpoint and AI Routines are
+   both thin adapters over that registry: MCP registers the zod shape, routines
+   derive JSON Schema from it. Adding a tool to one surface only is how the two
+   drift apart. `unattended: false` withholds a tool from routines — a routine
+   runs with nobody watching, an MCP client has a person driving it.
 9. **User-written code never runs in the API process.** Scripts are queued; the
    `runner/` service claims them and executes each in a scratch dir as a child
    process with a SIGKILL timeout and a `ulimit -v` memory cap, holding a token

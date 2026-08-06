@@ -154,8 +154,11 @@ describe('running a routine', () => {
     const res = await request(app).post(`/api/routines/${routine.id}/run`).set(auth(user.token));
     expect(res.status).toBe(201);
     expect(res.body.run.status).toBe('succeeded');
-    // tickets:read grants list_tickets and nothing else — no post_message.
-    expect(stub.offered[0]).toEqual(['list_tickets']);
+    // tickets:read grants the whole read set from the shared registry — the same
+    // verbs an MCP client gets — and nothing outside that scope.
+    expect(stub.offered[0]).toEqual(['list_projects', 'list_tickets', 'get_ticket']);
+    expect(stub.offered[0]).not.toContain('post_message');
+    expect(stub.offered[0]).not.toContain('create_ticket');
   });
 
   it('refuses a tool the routine has no scope for, even if the model asks', async () => {
