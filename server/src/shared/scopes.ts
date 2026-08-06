@@ -33,6 +33,9 @@ export const SCOPES = [
   'calendar:write',
   'gmail:read',
   'gmail:write',
+  // Read-only by design: agents find and reference Drive files; they do not
+  // write to anyone's Drive.
+  'drive:read',
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];

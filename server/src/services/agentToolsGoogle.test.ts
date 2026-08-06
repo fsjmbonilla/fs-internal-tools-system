@@ -136,6 +136,47 @@ describe('whose Google a tool uses', () => {
   });
 });
 
+describe('drive tools', () => {
+  it('search_drive finds the owner’s files by name; scope-gated like the rest', async () => {
+    const bot = (await ensureBotUser())!;
+    const owner = await seedUser('drive-owner@flowerstore.ph');
+    await connectGoogle(owner);
+    fake.addDriveFile({ name: 'inventory-july.xlsx' });
+    fake.addDriveFile({ name: 'holiday-photos.zip' });
+
+    const result = (await byName('search_drive').handler({ query: 'inventory' } as never, {
+      userId: bot,
+      isAdmin: false,
+      googleUserId: owner,
+    })) as { files: { name: string }[] };
+    expect(result.files.map((f) => f.name)).toEqual(['inventory-july.xlsx']);
+
+    expect(toolsForScopes(['drive:read']).map((t) => t.name).sort()).toEqual([
+      'list_drive_files',
+      'search_drive',
+    ]);
+    // Unattended-friendly: a routine may find files.
+    expect(
+      toolsForScopes(['drive:read'], { unattendedOnly: true }).map((t) => t.name),
+    ).toContain('search_drive');
+  });
+
+  it('a pre-Drive grant refuses with the reconnect message', async () => {
+    const bot = (await ensureBotUser())!;
+    const owner = await seedUser('drive-owner2@flowerstore.ph');
+    await connectGoogle(owner);
+    fake.breakDriveScope();
+
+    const result = await byName('list_drive_files').handler({} as never, {
+      userId: bot,
+      isAdmin: false,
+      googleUserId: owner,
+    });
+    expect(isRefusal(result)).toBe(true);
+    expect((result as { refusal: string }).refusal).toContain('reconnect');
+  });
+});
+
 describe('a routine borrows its owner’s connection', () => {
   it('list_calendar_events inside a routine reads the owner’s calendar', async () => {
     await ensureBotUser();

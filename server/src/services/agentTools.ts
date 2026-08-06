@@ -23,6 +23,7 @@ import {
   createEvent as createCalendarEvent,
   listEvents as listCalendarEvents,
 } from './calendarService.js';
+import { listFiles as listDriveFiles } from './driveService.js';
 import { listMail, sendMail } from './gmailService.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { getIo } from '../sockets/registry.js';
@@ -398,6 +399,28 @@ export const AGENT_TOOLS: AgentTool[] = [
     unattended: true,
     handler: async ({ query, pageToken }, caller) =>
       googleCall(caller, (googleUserId) => listMail(googleUserId, { q: query, pageToken })),
+  }),
+
+  tool({
+    scope: 'drive:read',
+    name: 'search_drive',
+    description:
+      "Search the empowering user's Google Drive by file name (e.g. \"last month's inventory sheet\" → search 'inventory'). Returns name, mime type, size, and a web link per file.",
+    shape: { query: z.string().min(1).max(300) },
+    unattended: true,
+    handler: async ({ query }, caller) =>
+      googleCall(caller, (googleUserId) => listDriveFiles(googleUserId, { q: query })),
+  }),
+
+  tool({
+    scope: 'drive:read',
+    name: 'list_drive_files',
+    description:
+      "List the empowering user's Google Drive — the root, or one folder's contents when folderId is given.",
+    shape: { folderId: z.string().max(120).optional() },
+    unattended: true,
+    handler: async ({ folderId }, caller) =>
+      googleCall(caller, (googleUserId) => listDriveFiles(googleUserId, { folderId })),
   }),
 
   tool({
