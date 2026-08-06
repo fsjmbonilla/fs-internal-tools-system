@@ -7,6 +7,7 @@ export * from './notes.js';
 export * from './projects.js';
 export * from './push.js';
 export * from './reactions.js';
+export * from './routines.js';
 export * from './scripts.js';
 export * from './sheets.js';
 export * from './support.js';

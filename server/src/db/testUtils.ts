@@ -2,11 +2,14 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from '../config.js';
 import { resetTokenTouchState } from '../services/apiTokenService.js';
+import { stopAllRoutines } from '../services/routineScheduler.js';
 import { resetLocks } from '../services/sheetService.js';
 import { pool } from './index.js';
 
 const TABLES = [
   'ai_usage',
+  'routine_runs',
+  'routines',
   'script_runs',
   'scripts',
   'sheets',
@@ -52,4 +55,7 @@ export async function resetDb(): Promise<void> {
   // Sheet edit locks are held in memory and keyed by sheet id, which truncation
   // reuses — a stale lock would silently make the next test's sheet read-only.
   resetLocks();
+  // Cron timers outlive a truncation too — a routine armed by one suite would
+  // keep firing against the next suite's data.
+  stopAllRoutines();
 }

@@ -31,7 +31,9 @@ import type { Scope } from '../services/apiTokenService.js';
 import { getVisibleChannel, isChannelMember, listVisibleChannels } from '../services/channelService.js';
 import { createDoc, getDoc, getDocWithAttachments, listDocs, updateDoc } from '../services/docService.js';
 import { searchMessages, sendMessage } from '../services/messageService.js';
-import { getVisibleProject, isProjectMember, listVisibleProjects } from '../services/projectService.js';
+import { listVisibleProjects } from '../services/projectService.js';
+// Shared with AI routines: one place decides what an agent may reach.
+import { projectForReading, projectForWriting } from '../services/agentAuth.js';
 import {
   canWrite,
   createSheet,
@@ -81,18 +83,6 @@ function refuse(message: string): ToolResult {
 }
 
 const NOT_FOUND = 'Not found, or not visible to this token.';
-
-/** Visibility, then membership — the order every REST route uses. */
-async function projectForWriting(projectId: number, caller: Caller) {
-  const project = await getVisibleProject(projectId, caller.userId, caller.isAdmin);
-  if (!project) return null;
-  if (!caller.isAdmin && !(await isProjectMember(projectId, caller.userId))) return null;
-  return project;
-}
-
-async function projectForReading(projectId: number, caller: Caller) {
-  return getVisibleProject(projectId, caller.userId, caller.isAdmin);
-}
 
 /**
  * Build the server for one request.

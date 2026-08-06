@@ -23,6 +23,7 @@
     "compression": "^1.8.1",
     "content-disposition": "^2.0.1",
     "cors": "^2.8.6",
+    "croner": "^10.0.1",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.0",

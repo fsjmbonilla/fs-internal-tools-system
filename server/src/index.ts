@@ -7,6 +7,7 @@ import { pool } from './db/index.js';
 import { logger } from './logger.js';
 import { runAttachmentGc } from './services/attachmentService.js';
 import { ensureBotUser } from './services/botService.js';
+import { startScheduler } from './services/routineScheduler.js';
 import { registerSocketHandlers } from './sockets/index.js';
 import { setIo } from './sockets/registry.js';
 
@@ -34,6 +35,15 @@ registerAutomations();
 ensureBotUser()
   .then((id) => logger.info({ botUserId: id }, 'assistant bot user ready'))
   .catch((err) => logger.warn({ err }, 'could not ensure the bot user — support intake will no-op'));
+
+/**
+ * Arm the routine schedules from the database.
+ *
+ * Rebuilt at boot rather than remembered in the process, which is what makes a
+ * restart safe: croner computes the next occurrence from the clock, so nothing
+ * double-fires because the server came back up.
+ */
+startScheduler().catch((err) => logger.error({ err }, 'could not start the routine scheduler'));
 
 const GC_INTERVAL_MS = 60 * 60 * 1000;
 const gcTimer = setInterval(() => {
