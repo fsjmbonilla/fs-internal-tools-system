@@ -59,7 +59,7 @@ npx pm2 start ecosystem.config.cjs
 
 cd server && npm run db:migrate   # apply migrations
 cd server && npm run seed:admin -- <email> <password>   # create an admin
-cd server && npm run seed:bot     # create the FS Assistant bot user (Phase 7)
+cd server && npm run seed:bot     # optional — the server ensures this bot user at every boot
 cd server && npm test             # vitest + supertest against a real test DB
 npm run build && npm run lint     # frontend (repo root)
 ```

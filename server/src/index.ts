@@ -6,6 +6,7 @@ import { config } from './config.js';
 import { pool } from './db/index.js';
 import { logger } from './logger.js';
 import { runAttachmentGc } from './services/attachmentService.js';
+import { ensureBotUser } from './services/botService.js';
 import { registerSocketHandlers } from './sockets/index.js';
 import { setIo } from './sockets/registry.js';
 
@@ -18,6 +19,21 @@ app.set('io', io);
 setIo(io);
 registerSocketHandlers(io);
 registerAutomations();
+
+/**
+ * The assistant's identity, guaranteed at boot rather than by a deploy step.
+ *
+ * `npm run seed:bot` existed but nothing in the deploy path ran it, and the only
+ * symptom of forgetting was one warning per triage — support intake silently did
+ * nothing while chat looked healthy. ensureBotUser() is an idempotent upsert, so
+ * running it every boot costs one query and removes the failure mode.
+ *
+ * Deliberately non-fatal: on a first deploy the migrations may not have run yet,
+ * and refusing to start would take chat down over a feature that degrades fine.
+ */
+ensureBotUser()
+  .then((id) => logger.info({ botUserId: id }, 'assistant bot user ready'))
+  .catch((err) => logger.warn({ err }, 'could not ensure the bot user — support intake will no-op'));
 
 const GC_INTERVAL_MS = 60 * 60 * 1000;
 const gcTimer = setInterval(() => {

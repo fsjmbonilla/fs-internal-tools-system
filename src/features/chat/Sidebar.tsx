@@ -168,6 +168,7 @@ function DmLink({ dm, active }: { dm: DmSummary; active: boolean }) {
 
 function ChannelLink({ channel, active }: { channel: Channel; active: boolean }) {
   const unread = channel.unreadCount > 0;
+  const isSupport = channel.kind === 'support';
   return (
     <Link
       to={`/chat/${channel.id}`}
@@ -175,7 +176,19 @@ function ChannelLink({ channel, active }: { channel: Channel; active: boolean })
         active ? 'bg-white/20' : ''
       } ${unread ? 'font-bold' : 'text-white/80'}`}
     >
-      <span># {channel.name}</span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate"># {channel.name}</span>
+        {isSupport && (
+          // Not decoration: the assistant reads this channel and can file a ticket
+          // from what you write, so it should not look like an ordinary channel.
+          <span
+            className="shrink-0 rounded bg-white/20 px-1 text-[10px] font-medium uppercase tracking-wide"
+            title="Support channel — the assistant reads this and may file a ticket"
+          >
+            support
+          </span>
+        )}
+      </span>
       {unread && (
         <span className="rounded-full bg-red-500 px-1.5 text-xs font-semibold">
           {channel.unreadCount}

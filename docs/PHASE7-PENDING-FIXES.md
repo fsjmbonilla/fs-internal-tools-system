@@ -1,14 +1,15 @@
 # Phase 7 — post-review fixes (mostly applied; a record)
 
-> **Status as of 2026-08-06: every Critical and every Important is now fixed.**
-> Phase 7 merged at `b2b9bc9`; both Criticals in `3afa5df`, Important 3/4/6 in
-> `a8834fc`, and the last three — 5, 7 and 8 — on 2026-08-06 along with four of the
-> Minor items. Each item below is tagged with its state, **verified against the
-> code**, not inferred from commit messages.
+> **Status as of 2026-08-06: this review is closed.** Every Critical, every Important,
+> and every actionable Minor is fixed. Phase 7 merged at `b2b9bc9`; both Criticals in
+> `3afa5df`, Important 3/4/6 in `a8834fc`, and the rest — Important 5/7/8 plus the
+> frontend, ops and Minor items — on 2026-08-06. Each item below is tagged with its
+> state, **verified against the code**, not inferred from commit messages.
 >
 > **Deliberately not done:** `isAiConfigured()` is kept (see the Minor list), and the
-> four frontend/ops items are unstarted. The remaining unticked Minor entries were not
-> re-audited — treat them as unverified rather than as known-open.
+> debounce test still uses real timers rather than fake ones — it is not flaky in
+> practice, and the 50ms window is documented where it is set. Two entries near the end
+> (pino `redact`, the two remaining test gaps) are unchanged and were judged low value.
 >
 > Read this for *why* each fix looks the way it does. It is history, not a to-do list.
 
@@ -144,13 +145,27 @@ the rest are as-written in the original review and may or may not still hold.*
 - **FIXED.** `server/.env.example` now documents `AI_PROVIDER`/`OPENAI_API_KEY`/`AI_MODEL`/
   `SUPPORT_DEBOUNCE_MS`.
 - No pino `redact` config (low risk; OpenAI `APIError` carries response, not request, headers).
-- **Still open.** Frontend `Channel` type (`src/features/chat/types.ts`) has no `kind`, so
-  support channels look identical in the sidebar.
-- Nothing in the deploy path runs `seed:bot` (degrades to one warn per triage — fail-soft, easy to miss).
-- `NewSupportChannelDialog` lacks a busy/disabled state (double-click could double-POST) and `<label>`s.
+- **FIXED** (2026-08-06). Frontend `Channel` type (`src/features/chat/types.ts`) has no `kind`,
+  so support channels look identical in the sidebar. `kind` was already in the list payload —
+  only the type and the UI were missing. `ChannelLink` now renders a "support" chip, and a route
+  test asserts `kind` survives the payload so the chip cannot silently stop working.
+- **FIXED** (2026-08-06). Nothing in the deploy path runs `seed:bot` — `index.ts` now calls
+  `ensureBotUser()` at boot. It is an idempotent upsert, so it costs one query per start and
+  removes the failure mode entirely; the `seed:bot` script stays for setting up a database by
+  hand. Deliberately non-fatal: on a first deploy the migrations may not have run yet, and
+  refusing to start would take chat down over a feature that degrades fine on its own.
+- **FIXED** (2026-08-06). `NewSupportChannelDialog` lacks a busy/disabled state (double-click could
+  double-POST) and `<label>`s. Every control now has a real `<label>` via `useId`, inputs disable
+  while the request is in flight, the button reads "Creating…", and `handleCreate` returns early
+  if it is re-entered. The error line is `role="alert"`.
 - The debounce test is wall-clock sensitive (50ms window vs. real MySQL round trips) — fake timers
   would make it robust.
-- Channel-create + config-upsert aren't in one DB transaction, so a mid-failure could orphan a channel.
+- **FIXED** (2026-08-06). Channel-create + config-upsert aren't in one DB transaction, so a
+  mid-failure could orphan a channel. Both now run in one `db.transaction`, the same pattern
+  `findOrCreateDm` already used. `createChannel`, `addChannelMember`, `getSupportConfig` and
+  `upsertSupportConfig` take an optional `Executor` (pool or open transaction, exported from
+  `db/index.ts`) so a service can join a caller's transaction without knowing it is in one.
+  Rollback is proven in `routes/channelCreateAtomicity.test.ts`.
 
 ## Testing gaps worth closing
 

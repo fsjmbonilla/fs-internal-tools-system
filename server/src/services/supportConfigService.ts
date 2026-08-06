@@ -1,11 +1,14 @@
 import { and, asc, eq } from 'drizzle-orm';
-import { db } from '../db/index.js';
+import { db, type Executor } from '../db/index.js';
 import { supportConfigs, taskColumns } from '../db/schema/index.js';
 
 export type SupportConfigRow = typeof supportConfigs.$inferSelect;
 
-export async function getSupportConfig(channelId: number): Promise<SupportConfigRow | null> {
-  const [row] = await db.select().from(supportConfigs).where(eq(supportConfigs.channelId, channelId));
+export async function getSupportConfig(
+  channelId: number,
+  exec: Executor = db,
+): Promise<SupportConfigRow | null> {
+  const [row] = await exec.select().from(supportConfigs).where(eq(supportConfigs.channelId, channelId));
   return row ?? null;
 }
 
@@ -40,7 +43,7 @@ export async function upsertSupportConfig(input: {
   intakeColumnId: number;
   aiEnabled?: boolean;
   instructions?: string | null;
-}): Promise<SupportConfigRow> {
+}, exec: Executor = db): Promise<SupportConfigRow> {
   const values = {
     channelId: input.channelId,
     projectId: input.projectId,
@@ -48,7 +51,7 @@ export async function upsertSupportConfig(input: {
     aiEnabled: input.aiEnabled ?? true,
     instructions: input.instructions ?? null,
   };
-  await db
+  await exec
     .insert(supportConfigs)
     .values(values)
     .onDuplicateKeyUpdate({
@@ -59,7 +62,7 @@ export async function upsertSupportConfig(input: {
         instructions: values.instructions,
       },
     });
-  const row = await getSupportConfig(input.channelId);
+  const row = await getSupportConfig(input.channelId, exec);
   if (!row) throw new Error('support config upsert failed');
   return row;
 }

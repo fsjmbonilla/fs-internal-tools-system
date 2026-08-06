@@ -1,5 +1,5 @@
 import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
-import { db } from '../db/index.js';
+import { db, type Executor } from '../db/index.js';
 import { channelMembers, channels, departmentMembers, users } from '../db/schema/index.js';
 import { events } from './events.js';
 
@@ -47,8 +47,9 @@ export async function addChannelMember(
   channelId: number,
   userId: number,
   role: 'owner' | 'member' = 'member',
+  exec: Executor = db,
 ): Promise<void> {
-  await db
+  await exec
     .insert(channelMembers)
     .values({ channelId, userId, role })
     .onDuplicateKeyUpdate({ set: { role: sql`role` } }); // insert-or-ignore
@@ -71,8 +72,8 @@ export async function createChannel(input: {
   departmentId?: number;
   kind?: 'standard' | 'support';
   createdBy: number;
-}): Promise<ChannelRow> {
-  const [{ id }] = await db
+}, exec: Executor = db): Promise<ChannelRow> {
+  const [{ id }] = await exec
     .insert(channels)
     .values({
       name: input.name,
@@ -84,15 +85,15 @@ export async function createChannel(input: {
       createdBy: input.createdBy,
     })
     .$returningId();
-  await addChannelMember(id, input.createdBy, 'owner');
+  await addChannelMember(id, input.createdBy, 'owner', exec);
   if (input.departmentId) {
-    const members = await db
+    const members = await exec
       .select({ userId: departmentMembers.userId })
       .from(departmentMembers)
       .where(eq(departmentMembers.departmentId, input.departmentId));
-    for (const m of members) await addChannelMember(id, m.userId);
+    for (const m of members) await addChannelMember(id, m.userId, 'member', exec);
   }
-  const [row] = await db.select().from(channels).where(eq(channels.id, id));
+  const [row] = await exec.select().from(channels).where(eq(channels.id, id));
   return row;
 }
 

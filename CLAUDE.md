@@ -16,7 +16,7 @@ scope and order.
 |---|---|
 | `src/` | SPA. `features/<area>/` per domain (chat, kanban, docs, notes, admin, calls, files), `components/ui/` is shadcn. |
 | `server/src/routes/` | HTTP surface. One file per area; every router carries an explicit auth gate. |
-| `server/src/services/` | All business logic. Routes validate and delegate; services never import express. |
+| `server/src/services/` | All business logic. Routes validate and delegate; services never import express. A service that may need to join a caller's transaction takes a trailing `exec: Executor = db` (from `db/index.ts`) and uses it for every query — see `createChannel` / `upsertSupportConfig`. |
 | `server/src/mcp/` | The MCP endpoint. Thin wrappers over services — no business logic here, ever. |
 | `server/src/automations/` | Event-bus listeners (support intake, ticket-status announcements). Registered in `index.ts` at boot, **not** in `createApp()`. |
 | `server/drizzle/` | Migrations. Rename generated files to describe them (`0011_api_tokens.sql`) and update `meta/_journal.json` to match. |
@@ -26,7 +26,7 @@ scope and order.
 
 ```bash
 # server (from server/)
-npm test                  # vitest + supertest against a real MySQL — 269 tests, 57 files
+npm test                  # vitest + supertest against a real MySQL — 272 tests, 58 files
 npx vitest run src/routes/notes.test.ts   # one file
 npm run build              # tsc
 npm run db:generate        # drizzle-kit generate, then rename the file + journal tag
@@ -112,11 +112,10 @@ MEDIUMTEXT, `format` enum added, applied to dev). Nothing reads `format` yet.
 
 ### Open items
 
-- **Phase 7 review is closed** as of 2026-08-06 — every Critical and Important is fixed
-  (`docs/PHASE7-PENDING-FIXES.md` tags each one). What is left there is frontend and ops:
-  support channels are not visually distinct in the sidebar, `NewSupportChannelDialog`
-  has no busy state or labels, channel-create and config-upsert are not in one
-  transaction, and nothing in the deploy path runs `seed:bot`.
+- **Phase 7 review is closed** as of 2026-08-06 — every Critical, Important and actionable
+  Minor is fixed, and `docs/PHASE7-PENDING-FIXES.md` tags each one with its verified state.
+  Two things are kept deliberately, with reasons recorded there: `isAiConfigured()`, and
+  the debounce test's real timers.
 - **Deferred by the user:** iOS/Android native push (needs `google-services.json`,
   `GoogleService-Info.plist`, an APNs `.p8`) and the native apps generally — web
   first.

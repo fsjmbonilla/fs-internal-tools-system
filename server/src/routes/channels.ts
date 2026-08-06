@@ -124,8 +124,15 @@ channelsRouter.post('/', requireUserAuth, /* creating a channel is org structure
       ? await resolveSupportBinding(supportConfig, req.auth!.userId, isAdmin)
       : null;
 
-  const channel = await createChannel({ ...channelInput, kind, createdBy: req.auth!.userId });
-  if (binding) await upsertSupportConfig({ channelId: channel.id, ...binding });
+  // One transaction, so a support channel cannot exist without the config that
+  // makes it a support channel. Binding is authorized above, before anything is
+  // written, but the upsert can still fail on its own — and a channel whose kind
+  // says 'support' with no config row is inert in a way nothing surfaces.
+  const channel = await db.transaction(async (tx) => {
+    const created = await createChannel({ ...channelInput, kind, createdBy: req.auth!.userId }, tx);
+    if (binding) await upsertSupportConfig({ channelId: created.id, ...binding }, tx);
+    return created;
+  });
   res.status(201).json({ channel });
 });
 

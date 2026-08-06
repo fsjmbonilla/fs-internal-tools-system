@@ -221,6 +221,44 @@ describe('support config cannot be attached to a standard channel', () => {
   });
 });
 
+describe('the channel list tells the client which channels are support channels', () => {
+  beforeEach(resetDb);
+
+  // The sidebar marks support channels, because what you type in one may become a
+  // ticket. That badge is only possible if `kind` survives the list payload.
+  it('includes kind on every channel', async () => {
+    const owner = await makeUser(app, { email: 'kindlist@flowerstore.ph' });
+    const project = await request(app)
+      .post('/api/projects')
+      .set(auth(owner.token))
+      .send({ name: 'Kind project', isPrivate: false });
+    const board = await request(app)
+      .get(`/api/projects/${project.body.project.id}/board`)
+      .set(auth(owner.token));
+
+    await request(app)
+      .post('/api/channels')
+      .set(auth(owner.token))
+      .send({ name: `plain${Date.now()}`, isPrivate: false });
+    await request(app)
+      .post('/api/channels')
+      .set(auth(owner.token))
+      .send({
+        name: `helpdesk${Date.now()}`,
+        isPrivate: false,
+        kind: 'support',
+        supportConfig: {
+          projectId: project.body.project.id,
+          intakeColumnId: board.body.columns[0].id,
+        },
+      });
+
+    const list = await request(app).get('/api/channels').set(auth(owner.token));
+    const kinds = list.body.channels.map((c: { kind: string }) => c.kind).sort();
+    expect(kinds).toEqual(['standard', 'support']);
+  });
+});
+
 describe('the bot loop guard repairs itself', () => {
   beforeEach(resetDb);
 

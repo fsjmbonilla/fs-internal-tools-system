@@ -13,3 +13,12 @@ export const pool = mysql.createPool({
 });
 
 export const db = drizzle(pool, { schema, mode: 'default' });
+
+/**
+ * Either the pool or an open transaction.
+ *
+ * A service that takes one of these can be composed into a caller's transaction
+ * without knowing it is in one. Derived from `db.transaction`'s own callback
+ * parameter so it stays correct if drizzle's transaction type changes.
+ */
+export type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];

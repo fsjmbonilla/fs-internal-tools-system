@@ -78,7 +78,7 @@ unset until their phase is live:
 cd server
 npm run db:migrate
 npm run seed:admin -- you@flowerstore.ph <password-min-12-chars>
-npm run seed:bot        # FS Assistant bot user, required for Phase 7 AI intake
+npm run seed:bot        # optional — the server also ensures this bot user at boot
 ```
 
 Registration is restricted to allow-listed company domains (flowerstore.ph, potico.ph,
