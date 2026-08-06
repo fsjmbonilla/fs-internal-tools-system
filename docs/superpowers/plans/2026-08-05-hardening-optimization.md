@@ -1,4 +1,11 @@
-# Phase 5: Hardening, Gaps & Optimization (+ Teleconferencing Readiness) — Implementation Plan
+# Hardening, Gaps & Optimization (+ Teleconferencing Readiness) — Implementation Plan
+
+> **Not a master-plan phase.** This is a cross-cutting pass over phases 1–4, done
+> 2026-08-05. It was originally titled "Phase 5" because local `main` only had
+> phases 1–4 at the time — phases 5–7 existed on unmerged remote branches, so the
+> next free number looked like 5. It isn't: the master plan assigns 5 to push
+> notifications. Plans that are not master-plan phases get a descriptive name and
+> no number.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -241,7 +248,7 @@ Not building calls in this phase — de-risking them, since the master plan incl
 
 ### Task E1: Spike (timeboxed)
 
-- [x] **Design doc written: `docs/superpowers/plans/2026-08-05-phase6-teleconferencing-design.md`.** Covers the recommendation and why the alternatives lose, the room-per-channel model, the token endpoint in full (it reuses `requireVisibleChannel` + `isChannelMember`, so 404-invisibility extends to calls with no second permission system), the real infrastructure cost (UDP 50000–60000, TURN/TLS, Redis only when multi-node), and what is deliberately out of scope.
+- [x] **Design doc written: `docs/superpowers/plans/2026-08-05-teleconferencing-livekit-design.md`.** Covers the recommendation and why the alternatives lose, the room-per-channel model, the token endpoint in full (it reuses `requireVisibleChannel` + `isChannelMember`, so 404-invisibility extends to calls with no second permission system), the real infrastructure cost (UDP 50000–60000, TURN/TLS, Redis only when multi-node), and what is deliberately out of scope.
 
 - [ ] **Not done, and cannot be done here — two questions need real hardware and a team answer.** The doc states both as blocking:
   1. **The Capacitor device matrix.** WKWebView supports `getUserMedia` from iOS 14.3, needs the two Info.plist usage strings, and *re-prompts on every call* before iOS 15. Whether permissions, backgrounding, echo cancellation and thermals are acceptable in the webview decides whether the native path is the webview or the official Swift/Android SDKs behind a plugin — and that decision comes before any call UI, because it determines whether web and native can share it. A simulator cannot answer it.

@@ -1,9 +1,21 @@
-# Phase 6 (design): Teleconferencing — LiveKit readiness
+# Teleconferencing — LiveKit readiness (design)
 
-> **Status: design, not an implementation plan.** This is the deliverable of
-> Phase 5 Task E1. It says what to build, what it costs, and the two things that
-> must be answered on real hardware before anyone commits. Turn it into a
-> task-by-task plan once those are answered.
+> **Status: superseded by the shipped implementation. Kept as a record.**
+> Master-plan Phase 6 (teleconference) was already built on the remote branch
+> that merged at `b2b9bc9`, along the same lines this document recommends —
+> self-hosted LiveKit, a room per channel, tokens minted behind the existing
+> channel-visibility check. See `2026-07-31-phase6-calls.md` for the plan that
+> was actually executed, and `server/src/services/callService.ts` +
+> `src/features/calls/` for the code.
+>
+> This was written on 2026-08-05 as the deliverable of Task E1 in
+> `2026-08-05-hardening-optimization.md`, when local `main` held only phases 1–4
+> and the phase 5–7 branches had not been merged — so the feature looked unbuilt
+> and the next free phase number looked like 6. Neither was true. What remains
+> useful here is the *why*: the alternatives comparison, the infrastructure cost
+> (UDP 50000–60000, TURN/TLS, Redis only when multi-node), and the two questions
+> still open on real hardware (Capacitor webview call quality, and one call per
+> channel vs. many).
 
 **Goal of the feature:** start an audio/video call from a channel, so a
 conversation that outgrows text does not move to a different tool.
@@ -93,7 +105,7 @@ Roughly, in order:
    member → a token whose decoded grant names exactly `channel:<id>`.
 2. **Web:** `@livekit/components-react` + `livekit-client`. A call bar in the
    channel header, and a `<LiveKitRoom>` panel. These load in the chat chunk, so
-   Phase 5's code splitting keeps them off the login path — check the bundle
+   the hardening pass's code splitting keeps them off the login path — check the bundle
    after, since `livekit-client` is not small.
 3. **Native:** Info.plist usage strings, Android runtime permissions, and a
    verified device matrix (below).

@@ -1,15 +1,31 @@
-# Phase 7 — pending post-review fixes (NOT yet applied)
+# Phase 7 — post-review fixes (mostly applied; a record)
 
-**State:** branch `phase-7-ai-support`, 8 commits, **NOT merged**. `main` is clean at Phase 6 (`67f8cae`).
-All 8 plan tasks are implemented, task-reviewed, and committed. The full whole-branch review then
-found the issues below. User paused before fixes were applied ("fix it next time").
+> **Status as of 2026-08-06 — this was originally written as pending work, and most of it
+> has since been fixed.** Phase 7 merged at `b2b9bc9`; both Criticals were fixed in
+> `3afa5df`, and Important 3, 4 and 6 in `a8834fc`. Each item below is tagged with its
+> current state, **verified against the code**, not inferred from commit messages.
+>
+> **Still open: Important 5** (`intakeColumnId` not validated against its project) **and
+> Important 8** (inert `PUT` on a standard channel). Important 7 got its cheap partial fix
+> only. The Minor list is largely unaudited — treat its items as unverified.
+>
+> Read this for *why* each fix looks the way it does. It is history, not a to-do list;
+> the live to-do list is the open-items section of `CLAUDE.md`.
+
+**Original state when written:** branch `phase-7-ai-support`, 8 commits, not merged. `main`
+was clean at Phase 6 (`67f8cae`). All 8 plan tasks were implemented, task-reviewed, and
+committed. The full whole-branch review then found the issues below. User paused before
+fixes were applied ("fix it next time").
 
 Plan: `docs/superpowers/plans/2026-07-31-phase7-ai-support.md`
-Verdict: **Ready to merge = With fixes** (2 Critical must be fixed first).
+Verdict at the time: **Ready to merge = With fixes** (2 Critical must be fixed first).
 
 ---
 
 ## CRITICAL 1 — No terminal state: AI files DUPLICATE tickets (EMPIRICALLY REPRODUCED)
+
+**FIXED** (`3afa5df`) — fix (a)+(b) applied; `supportIntake.ts` handles `action === 'none'`.
+The optional `last_triaged_message_id` watermark was **not** added.
 
 `aiService.ts`'s `DecisionSchema.action` is only `'ask_clarification' | 'create_ticket'`, so every
 non-bot message in a support channel forces one of those two. Nothing records that a ticket was
@@ -29,6 +45,9 @@ human-in-the-loop perpetuity, which is the real runaway path.
 - Consider also a `support_configs.last_triaged_message_id` watermark (belt-and-braces).
 
 ## CRITICAL 2 — Bot messages never delivered in real time (VERIFIED)
+
+**FIXED** (`3afa5df`) — exactly as prescribed: `server/src/sockets/registry.ts` exists and
+`messageService.sendMessage` broadcasts via `getIo()`.
 
 Only `server/src/sockets/chatHandlers.ts:42` emits `message:new`. The automation and the REST send
 route call `messageService.sendMessage` directly, so those messages are never pushed.
@@ -50,49 +69,65 @@ switch. The headline feature is invisible in the running app.
 
 ## Important
 
-3. **No in-flight guard.** `supportIntake.ts` does `pending.delete(channelId)` before invoking the
+3. **FIXED** (`a8834fc`). **No in-flight guard.** `supportIntake.ts` does `pending.delete(channelId)` before invoking the
    async handler, so a message arriving during a multi-second AI call starts a second overlapping
    triage on the same channel → two tickets, double spend. Add a module-level
    `inFlight = new Set<number>()`; skip if present; add before the handler, remove in `finally`.
 
-4. **`ensureBotUser` doesn't repair `is_bot`** — it's get-or-create, so a pre-existing account at
+4. **FIXED** (`a8834fc`) — both halves: `botService.ts` forces `isBot: true` on the existing-row
+   path, and `supportIntake.ts` has the `payload.message.userId === botUserId` guard.
+   **`ensureBotUser` doesn't repair `is_bot`** — it's get-or-create, so a pre-existing account at
    `assistant@flowerstore.ph` or a manual `UPDATE users SET is_bot=0` silently disables the ONLY
    loop guard. Fix: make it a real upsert (force `isBot: true` on the existing-row path), AND add
    belt-and-braces `if (payload.message.userId === botUserId) return;` in `handleSupportMessage`.
 
-5. **`intakeColumnId` never validated against `projectId`.** `resolveSupportBinding` authorizes the
+5. **STILL OPEN** (re-verified 2026-08-06) — `resolveSupportBinding` in `routes/channels.ts`
+   still takes a caller-supplied `input.intakeColumnId` at face value; it only derives a column
+   (via `resolveIntakeColumnId`) when the caller omits one. No `columnBelongsToProject` helper
+   exists. **`intakeColumnId` never validated against `projectId`.** `resolveSupportBinding` authorizes the
    project but accepts any positive column id, including one from another/invisible project. Tickets
    then get `projectId: A` + a column of project B; since `getBoard` filters by projectId they render
    on NO board — AI tickets silently vanish. Add a `columnBelongsToProject(columnId, projectId)`
    helper in `supportConfigService.ts` and 400 (`invalid_support_config`) when it fails.
 
-6. **`GET /:id/support-config` leaks a private project's existence.** Gates only on
+6. **FIXED** (`a8834fc`) — the GET now runs `getVisibleProject` and returns a null config
+   rather than the binding. **`GET /:id/support-config` leaks a private project's existence.** Gates only on
    `requireVisibleChannel`, then returns `projectId`/`intakeColumnId`/`instructions` — so a public
    support channel bound to a private project exposes it to everyone. The create path deliberately
    prevents exactly this. Fix: check `getVisibleProject`; if not visible return `{ supportConfig: null }`
    (do NOT 404 the channel — it is legitimately visible).
 
-7. **No spend ceiling.** `express-rate-limit` is applied only to auth routes; message send is
+7. **PARTIALLY FIXED — the ceiling itself is still open.** The cheap transcript cap landed
+   (`MAX_BODY_CHARS = 2000` in `services/ai/triage.ts`, where the AI code moved in `07515a8`),
+   but there is still no per-channel minimum interval, no daily cap and no cost logging;
+   `express-rate-limit` covers only auth and uploads. Critical 1's fix reduces the exposure.
+   **No spend ceiling.** `express-rate-limit` is applied only to auth routes; message send is
    unlimited on REST and socket. The debounce coalesces but doesn't throttle: one message every 6s
    sustains ~600 triage calls/hour at up to ~20k input tokens each. Recommend a per-channel minimum
    interval + a daily cap + cost logging. (Fixing Critical 1 materially reduces this.)
    *Partial cheap fix worth doing now:* cap each transcript body to ~2000 chars in `aiService.ts`.
 
-8. **`PUT /:id/support-config` on a standard channel returns 200 and does nothing** — it writes a
+8. **STILL OPEN** (re-verified 2026-08-06) — the PUT handler checks visibility and ownership,
+   never `kind`. **`PUT /:id/support-config` on a standard channel returns 200 and does nothing** — it writes a
    config row but never sets `channels.kind`, and nothing else can flip `kind`, so the row is
    permanently inert. Fix: 400 when the channel's `kind !== 'support'`.
 
 ## Minor (optional)
 
-- `isAiConfigured()` is dead production code (only tests/mocks reference it).
+*Not systematically re-audited. Four items were spot-checked on 2026-08-06 and are tagged;
+the rest are as-written in the original review and may or may not still hold.*
+
+- **Still open.** `isAiConfigured()` is dead production code (only tests/mocks reference it).
 - `POST /api/channels` with `kind` standard/omitted + a `supportConfig` body silently discards it — reject.
 - `if (!decision.question) return;` / `if (!decision.title) return;` are silent — should `logger.warn`.
-- Unused `addChannelMember` import in `supportIntake.test.ts`.
-- `MAX_CONTEXT_MESSAGES` (aiService) and `CONTEXT_MESSAGES` (supportIntake) are duplicated 20s.
-- `server/.env.example` doesn't document `OPENAI_API_KEY`/`AI_MODEL`/`SUPPORT_DEBOUNCE_MS`
-  (pre-existing practice — LIVEKIT/FIREBASE undocumented too).
+- **Still open.** Unused `addChannelMember` import in `supportIntake.test.ts`.
+- **Still open.** `MAX_CONTEXT_MESSAGES` (now `services/ai/triage.ts`) and `CONTEXT_MESSAGES`
+  (supportIntake) are duplicated 20s.
+- **FIXED.** `server/.env.example` now documents `AI_PROVIDER`/`OPENAI_API_KEY`/`AI_MODEL`/
+  `SUPPORT_DEBOUNCE_MS`.
 - No pino `redact` config (low risk; OpenAI `APIError` carries response, not request, headers).
-- Frontend `Channel` type has no `kind`, so support channels look identical in the sidebar.
+- **Still open.** Frontend `Channel` type (`src/features/chat/types.ts`) has no `kind`, so
+  support channels look identical in the sidebar.
 - Nothing in the deploy path runs `seed:bot` (degrades to one warn per triage — fail-soft, easy to miss).
 - `NewSupportChannelDialog` lacks a busy/disabled state (double-click could double-POST) and `<label>`s.
 - The debounce test is wall-clock sensitive (50ms window vs. real MySQL round trips) — fake timers

@@ -214,7 +214,7 @@ person would.
   as HTML. Native is unaffected — Capacitor `Preferences` uses the Keychain /
   EncryptedSharedPreferences. Moving web to an `httpOnly` cookie needs the SPA
   and API on one origin first (a Vite `/api` dev proxy); see Task A6 in
-  `docs/superpowers/plans/2026-08-05-phase5-hardening-optimization.md`.
+  `docs/superpowers/plans/2026-08-05-hardening-optimization.md`.
   *(Reviewed 2026-08-05.)*
 
 ## Deployment

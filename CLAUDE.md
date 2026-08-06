@@ -20,7 +20,7 @@ scope and order.
 | `server/src/mcp/` | The MCP endpoint. Thin wrappers over services — no business logic here, ever. |
 | `server/src/automations/` | Event-bus listeners (support intake, ticket-status announcements). Registered in `index.ts` at boot, **not** in `createApp()`. |
 | `server/drizzle/` | Migrations. Rename generated files to describe them (`0011_api_tokens.sql`) and update `meta/_journal.json` to match. |
-| `docs/superpowers/plans/` | Per-phase plans written before the work. Read the relevant one before starting a phase. |
+| `docs/superpowers/plans/` | Per-phase plans written before the work. Read the relevant one before starting a phase. Name them `<date>-phase<N>-<slug>.md` **only** when `<N>` is that phase's number in `docs/MASTER-PLAN.md`; anything else (a hardening pass, a design spike) gets a descriptive name and no number. |
 
 ## Commands
 
@@ -104,15 +104,11 @@ MEDIUMTEXT, `format` enum added, applied to dev). Nothing reads `format` yet.
 
 ### Open items
 
-- **Rotate three credentials.** The OpenAI key, Pusher secret, and Firebase
-  service-account were pasted in plaintext into a chat session. They live only in
-  gitignored `.env` files, but they should be rotated. The service-account JSON is
-  still in the working tree at the repo root.
-- **Phase numbering collision.** `docs/superpowers/plans/2026-08-05-phase5-*` and
-  `-phase6-*` are my hardening and teleconferencing docs, but the master plan assigns
-  5 = push and 6 = teleconferencing (both already built). Renumbering is unresolved.
-- **Two Phase 7 leftovers**: `intakeColumnId` is not validated against its
-  `projectId`, and there is an inert `PUT` on a standard (non-support) channel.
+- **Three Phase 7 leftovers** (details and verified status per item in
+  `docs/PHASE7-PENDING-FIXES.md`): `intakeColumnId` is not validated against its
+  `projectId`; there is an inert `PUT` on a standard (non-support) channel; and there
+  is still no AI spend ceiling — the transcript cap landed, but no per-channel
+  interval, daily cap, or cost logging.
 - **Deferred by the user:** iOS/Android native push (needs `google-services.json`,
   `GoogleService-Info.plist`, an APNs `.p8`) and the native apps generally — web
   first.
