@@ -7,9 +7,15 @@ import { pool } from './db/index.js';
 import { logger } from './logger.js';
 import { runAttachmentGc } from './services/attachmentService.js';
 import { ensureBotUser } from './services/botService.js';
+import { setGooglePort } from './services/google/port.js';
+import { realGooglePort } from './services/google/real.js';
 import { startScheduler } from './services/routineScheduler.js';
 import { registerSocketHandlers } from './sockets/index.js';
 import { setIo } from './sockets/registry.js';
+
+// The real Google implementation is installed only here: the app factory stays
+// network-free so every test suite decides for itself what "Google" answers.
+setGooglePort(realGooglePort);
 
 const app = createApp();
 const server = http.createServer(app);

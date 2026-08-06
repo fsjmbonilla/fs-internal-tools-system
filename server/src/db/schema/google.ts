@@ -1,15 +1,21 @@
 import {
   bigint,
+  customType,
   json,
   mysqlEnum,
   mysqlTable,
   timestamp,
   uniqueIndex,
-  varbinary,
   varchar,
 } from 'drizzle-orm/mysql-core';
 import { users } from './auth.js';
 import { channels, messages } from './chat.js';
+
+// Drizzle's own `varbinary` types the column as string, but mysql2 hands
+// VARBINARY back as a Buffer — this keeps the TS type honest.
+const binary1024 = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => 'varbinary(1024)',
+});
 
 /**
  * A Google connection — one user's Calendar/Gmail grant, or the org-level
@@ -35,7 +41,7 @@ export const googleAccounts = mysqlTable(
     }),
     kind: mysqlEnum('kind', ['user', 'support_mailbox']).notNull(),
     googleEmail: varchar('google_email', { length: 320 }).notNull(),
-    refreshTokenEnc: varbinary('refresh_token_enc', { length: 1024 }).notNull(),
+    refreshTokenEnc: binary1024('refresh_token_enc').notNull(),
     scopes: json('scopes').$type<string[]>().notNull(),
     status: mysqlEnum('status', ['active', 'broken']).notNull().default('active'),
     connectedBy: bigint('connected_by', { mode: 'number', unsigned: true })
