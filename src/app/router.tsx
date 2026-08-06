@@ -34,6 +34,10 @@ const NotesPage = lazy(() =>
 const ScriptsPage = lazy(() =>
   import('@/features/scripts/ScriptsPage').then((m) => ({ default: m.ScriptsPage })),
 );
+// Routines are not admin-only: everyone owns their own.
+const RoutinesPage = lazy(() =>
+  import('@/features/routines/RoutinesPage').then((m) => ({ default: m.RoutinesPage })),
+);
 const AdminPage = lazy(() =>
   import('@/features/admin/AdminPage').then((m) => ({ default: m.AdminPage })),
 );
@@ -92,6 +96,7 @@ export const router = createBrowserRouter([
           { path: '/projects/:projectId/sheets', element: <SheetListPage /> },
           { path: '/sheets/:sheetId', element: <SheetPage /> },
           { path: '/notes', element: <NotesPage /> },
+          { path: '/routines', element: <RoutinesPage /> },
           {
             element: <RequireAdmin />,
             children: [

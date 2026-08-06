@@ -66,12 +66,15 @@ quotes) and produces thousands of lines of noise. This has already happened once
    triage writes an `ai_usage` row with its token counts, and `checkAiBudget()` gates the
    next one (`AI_MIN_INTERVAL_MS` per channel, `AI_DAILY_CALL_CAP` per day). Any future
    paid AI call — routines, the script runner — belongs behind the same gate.
-8. **User-written code never runs in the API process.** Scripts are queued; the
+8. **Agent authorization lives in one place — `services/agentAuth.ts`.** The MCP
+   endpoint and AI routines both call it. A second agent surface reimplementing
+   "visible, then member" is exactly how the two would drift apart.
+9. **User-written code never runs in the API process.** Scripts are queued; the
    `runner/` service claims them and executes each in a scratch dir as a child
    process with a SIGKILL timeout and a `ulimit -v` memory cap, holding a token
    minted for that run alone and revoked when it ends. Anything that would
    execute user input belongs behind that boundary, not in `server/`.
-9. **Compare timestamps inside the database, not across the JS boundary.** Drizzle maps
+10. **Compare timestamps inside the database, not across the JS boundary.** Drizzle maps
    a MySQL TIMESTAMP back through UTC, so a `defaultNow()` column read into JS is off by
    the host's UTC offset — invisible on a UTC server, eight hours wrong on a Manila
    workstation. Use `NOW()` / `CURDATE()` in the query, as `aiBudgetService` does.
