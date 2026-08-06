@@ -3,6 +3,7 @@ import { markOffline, markOnline } from '../services/presence.js';
 import { registerAccessHandlers } from './accessHandlers.js';
 import { socketAuth } from './authMiddleware.js';
 import { registerChatHandlers } from './chatHandlers.js';
+import { registerSheetHandlers } from './sheetHandlers.js';
 
 export function registerSocketHandlers(io: Server): void {
   io.use(socketAuth);
@@ -13,5 +14,6 @@ export function registerSocketHandlers(io: Server): void {
     markOnline(socket.data.userId);
     socket.on('disconnect', () => markOffline(socket.data.userId));
     registerChatHandlers(io, socket);
+    registerSheetHandlers(io, socket);
   });
 }

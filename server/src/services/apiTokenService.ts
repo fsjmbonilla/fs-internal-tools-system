@@ -30,6 +30,8 @@ export const SCOPES = [
   'chat:write',
   'docs:read',
   'docs:write',
+  'sheets:read',
+  'sheets:write',
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];

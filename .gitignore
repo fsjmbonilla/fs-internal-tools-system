@@ -29,6 +29,10 @@ server/uploads/
 # Firebase service-account keys — a private key that can send push as this project.
 # Pattern-matched rather than named, because the download filename varies.
 *firebase-adminsdk*.json
+# Google OAuth client, as downloaded from the Cloud console. The file carries the
+# client secret in plaintext and lands in the repo root under this exact name.
+client_secret_*.json
+*.apps.googleusercontent.com.json
 *-service-account*.json
 google-services.json
 GoogleService-Info.plist

@@ -55,6 +55,12 @@ const EnvSchema = z.object({
   // 0 disables either limit — which is a deliberate choice, not the default.
   AI_MIN_INTERVAL_MS: z.coerce.number().int().nonnegative().default(60_000),
   AI_DAILY_CALL_CAP: z.coerce.number().int().nonnegative().default(500),
+  // Google Calendar / Gmail / Drive (phases 12-13). Optional, and degrading the
+  // same way push and AI do: unset means the Google features are simply not
+  // offered, rather than the server refusing to boot.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().default('http://localhost:4000/api/google/callback'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

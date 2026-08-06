@@ -33,6 +33,17 @@ import { createDoc, getDoc, getDocWithAttachments, listDocs, updateDoc } from '.
 import { searchMessages, sendMessage } from '../services/messageService.js';
 import { getVisibleProject, isProjectMember, listVisibleProjects } from '../services/projectService.js';
 import {
+  canWrite,
+  createSheet,
+  getLock,
+  getSheet,
+  getSheetSummary,
+  isWorkbookSnapshot,
+  listSheets,
+  updateSheet,
+} from '../services/sheetService.js';
+import { getIo } from '../sockets/registry.js';
+import {
   createTask,
   getBoard,
   getTaskById,
@@ -301,6 +312,69 @@ export function buildMcpServer(caller: Caller): McpServer {
       }
       if (!(await projectForWriting(projectId, caller))) return refuse(NOT_FOUND);
       return ok(await createDoc({ projectId, title, content, userId: caller.userId }));
+    },
+  );
+
+  // ─── Sheets ─────────────────────────────────────────────────────────────────
+
+  tool(
+    'sheets:read',
+    'list_sheets',
+    'List the spreadsheets in a project.',
+    { projectId: z.number().int().positive() },
+    async ({ projectId }) => {
+      if (!(await projectForReading(projectId, caller))) return refuse(NOT_FOUND);
+      return ok({ sheets: await listSheets(projectId) });
+    },
+  );
+
+  tool(
+    'sheets:read',
+    'read_sheet',
+    'Read one spreadsheet by id, including its workbook snapshot.',
+    { sheetId: z.number().int().positive() },
+    async ({ sheetId }) => {
+      const sheet = await getSheet(sheetId);
+      if (!sheet || !(await projectForReading(sheet.projectId, caller))) return refuse(NOT_FOUND);
+      return ok(sheet);
+    },
+  );
+
+  tool(
+    'sheets:write',
+    'write_sheet',
+    'Create a spreadsheet in a project, or replace an existing one\'s title/workbook snapshot.',
+    {
+      projectId: z.number().int().positive().optional(),
+      sheetId: z.number().int().positive().optional(),
+      title: z.string().min(1).max(200).optional(),
+      data: z.string().max(24_000_000).optional(),
+    },
+    async ({ projectId, sheetId, title, data }) => {
+      if (data !== undefined && !isWorkbookSnapshot(data)) {
+        return refuse('data must be a workbook snapshot (a JSON object).');
+      }
+      if (sheetId) {
+        const sheet = await getSheetSummary(sheetId);
+        if (!sheet || !(await projectForWriting(sheet.projectId, caller))) return refuse(NOT_FOUND);
+        // An agent respects the edit lock like anyone else. Without this an
+        // automation could overwrite whatever a person was in the middle of
+        // typing, which is the one thing the lock exists to prevent.
+        if (!canWrite(sheetId, caller.userId)) {
+          const lock = getLock(sheetId);
+          return refuse(`${lock?.displayName ?? 'Someone else'} is editing that sheet right now.`);
+        }
+        const updated = await updateSheet(sheetId, caller.userId, { title, data });
+        if (!updated) return refuse(NOT_FOUND);
+        getIo()?.to(`sheet:${sheetId}`).emit('sheet:updated', { sheetId, updatedBy: caller.userId });
+        return ok({ ...updated, data: undefined });
+      }
+      if (!projectId || !title) {
+        return refuse('Creating a sheet needs projectId and title; updating one needs sheetId.');
+      }
+      if (!(await projectForWriting(projectId, caller))) return refuse(NOT_FOUND);
+      const created = await createSheet({ projectId, title, data, userId: caller.userId });
+      return ok({ ...created, data: undefined });
     },
   );
 

@@ -2,10 +2,12 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from '../config.js';
 import { resetTokenTouchState } from '../services/apiTokenService.js';
+import { resetLocks } from '../services/sheetService.js';
 import { pool } from './index.js';
 
 const TABLES = [
   'ai_usage',
+  'sheets',
   'api_tokens',
   'refresh_tokens',
   'department_members',
@@ -45,4 +47,7 @@ export async function resetDb(): Promise<void> {
   await rm(join(config.UPLOAD_DIR, 'uploads'), { recursive: true, force: true });
   // In-memory state that outlives a truncation, so it has to be reset with it.
   resetTokenTouchState();
+  // Sheet edit locks are held in memory and keyed by sheet id, which truncation
+  // reuses — a stale lock would silently make the next test's sheet read-only.
+  resetLocks();
 }

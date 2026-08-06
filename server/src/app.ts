@@ -19,6 +19,7 @@ import { healthRouter } from './routes/health.js';
 import { notesRouter } from './routes/notes.js';
 import { docsRouter, projectsRouter, tasksRouter } from './routes/projects.js';
 import { pushRouter } from './routes/push.js';
+import { projectSheetsRouter, sheetsRouter } from './routes/sheets.js';
 import { uploadsRouter } from './routes/uploads.js';
 import { usersRouter } from './routes/users.js';
 
@@ -66,6 +67,15 @@ export function createApp(): express.Express {
   );
 
   app.use(cors({ origin: config.corsOrigins }));
+  /**
+   * A workbook snapshot is orders of magnitude larger than any other body this
+   * API accepts, so the sheet routes get their own limit rather than raising it
+   * for everything — a 25 MB ceiling on /api/messages would be an easy way to
+   * exhaust memory. Registered before the global parser so it wins for these paths.
+   */
+  const sheetJson = express.json({ limit: '25mb' });
+  app.use('/api/sheets', sheetJson);
+  app.use('/api/projects/:id/sheets', sheetJson);
   app.use(express.json({ limit: '1mb' }));
   app.use(
     pinoHttp({
@@ -87,6 +97,8 @@ export function createApp(): express.Express {
   app.use('/api/dms', dmsRouter);
   app.use('/api/projects', projectsRouter);
   app.use('/api/docs', docsRouter);
+  app.use('/api/sheets', sheetsRouter);
+  app.use('/api/projects/:id/sheets', projectSheetsRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/notes', notesRouter);
   app.use('/api/push', pushRouter);
