@@ -5,6 +5,7 @@ import { resetTokenTouchState } from '../services/apiTokenService.js';
 import { pool } from './index.js';
 
 const TABLES = [
+  'ai_usage',
   'api_tokens',
   'refresh_tokens',
   'department_members',

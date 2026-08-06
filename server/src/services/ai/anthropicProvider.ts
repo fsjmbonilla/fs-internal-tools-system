@@ -47,12 +47,22 @@ export const anthropicProvider: TriageProvider = {
     const anthropic = getClient();
     if (!anthropic) return null;
 
+    const model = config.AI_MODEL || DEFAULT_MODEL;
+    // Same contract as the OpenAI provider: report a dispatched call exactly once,
+    // whatever it returns, because it is billable either way.
+    let reported = false;
+    const report = (promptTokens = 0, completionTokens = 0) => {
+      if (reported) return;
+      reported = true;
+      input.onUsage?.({ provider: 'anthropic', model, promptTokens, completionTokens });
+    };
+
     try {
       // messages.parse() validates the response against the schema for us, so a
       // reply that does not fit the contract surfaces here rather than deeper in
       // the automation.
       const response = await anthropic.messages.parse({
-        model: config.AI_MODEL || DEFAULT_MODEL,
+        model,
         max_tokens: MAX_TOKENS,
         system: systemPrompt(input.instructions),
         output_config: {
@@ -62,6 +72,8 @@ export const anthropicProvider: TriageProvider = {
         },
         messages: [{ role: 'user', content: transcriptOf(input.messages) }],
       });
+
+      report(response.usage?.input_tokens, response.usage?.output_tokens);
 
       // Safety classifiers can decline a request: HTTP 200 with no usable
       // content. Treat it as "no decision" rather than reading content blindly.
@@ -83,6 +95,7 @@ export const anthropicProvider: TriageProvider = {
       return decision;
     } catch (err) {
       // Fail-soft, exactly as the OpenAI provider does: chat must never break.
+      report();
       logger.error({ err }, 'AI triage failed');
       return null;
     }

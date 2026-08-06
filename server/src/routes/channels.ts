@@ -27,6 +27,7 @@ import {
 } from '../services/messageService.js';
 import { getVisibleProject } from '../services/projectService.js';
 import {
+  columnBelongsToProject,
   getSupportConfig,
   resolveIntakeColumnId,
   upsertSupportConfig,
@@ -89,6 +90,12 @@ async function resolveSupportBinding(
 ): Promise<{ projectId: number; intakeColumnId: number; instructions?: string }> {
   const project = await getVisibleProject(input.projectId, userId, isAdmin);
   if (!project) throw new AppError(404, 'not_found', 'Not found');
+  // A caller-supplied column has to belong to the bound project. Without this check any
+  // positive id was accepted, including one from another (even invisible) project, and
+  // every ticket filed into it rendered on no board.
+  if (input.intakeColumnId !== undefined && !(await columnBelongsToProject(input.intakeColumnId, input.projectId))) {
+    throw new AppError(400, 'invalid_support_config', 'That intake column belongs to a different project');
+  }
   const intakeColumnId = input.intakeColumnId ?? (await resolveIntakeColumnId(input.projectId));
   if (intakeColumnId === null) {
     throw new AppError(400, 'invalid_support_config', 'Target project has no columns to file tickets into');
@@ -103,6 +110,12 @@ channelsRouter.post('/', requireUserAuth, /* creating a channel is org structure
 
   if (kind === 'support' && !supportConfig) {
     throw new AppError(400, 'invalid_support_config', 'A support channel requires supportConfig');
+  }
+  // The same silent-discard as the PUT below: a config sent for a standard channel
+  // used to be dropped on the floor and answered 201, so the caller believed it had
+  // configured triage that would never run.
+  if (kind !== 'support' && supportConfig) {
+    throw new AppError(400, 'invalid_support_config', 'Only a support channel can have a support config');
   }
   // Authorize the project binding BEFORE creating the channel, so a failed bind
   // never leaves an orphaned support channel with no config behind.
@@ -232,8 +245,14 @@ const supportConfigPut = z.object({
 channelsRouter.put('/:id/support-config', requireUserAuth, /* a token editing its own triage config is self-escalation */ validate(supportConfigPut), async (req, res) => {
   const id = parseId(req.params.id);
   const isAdmin = req.auth!.role === 'admin';
-  await requireVisibleChannel(id, req.auth!.userId, isAdmin);
+  const channel = await requireVisibleChannel(id, req.auth!.userId, isAdmin);
   await requireOwnerOrAdmin(id, req.auth!.userId, isAdmin);
+  // Nothing can flip channels.kind after creation, so writing a config row for a
+  // standard channel would store a row the intake automation never reads — a 200
+  // that silently does nothing.
+  if (channel.kind !== 'support') {
+    throw new AppError(400, 'invalid_support_config', 'Only a support channel can have a support config');
+  }
   const input = req.valid as z.infer<typeof supportConfigPut>;
   const binding = await resolveSupportBinding(
     { projectId: input.projectId, intakeColumnId: input.intakeColumnId },

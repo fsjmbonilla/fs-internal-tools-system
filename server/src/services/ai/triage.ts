@@ -22,9 +22,26 @@ export const DecisionSchema = z.object({
 
 export type TriageDecision = z.infer<typeof DecisionSchema>;
 
+/** What a call cost, as the provider reports it. */
+export interface TriageUsage {
+  provider: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+}
+
 export interface TriageInput {
   messages: { displayName: string; body: string }[];
   instructions?: string | null;
+  /**
+   * Called once with the token counts when a request was actually dispatched —
+   * including one that then failed, since a failed call is still billed.
+   *
+   * A callback rather than a second return value: every caller and every test
+   * treats triage as "decision or null", and threading a tuple through would have
+   * changed all of them to serve one caller that cares about cost.
+   */
+  onUsage?: (usage: TriageUsage) => void;
 }
 
 /** Every provider implements this and nothing more. */
@@ -49,7 +66,12 @@ export const BASE_PROMPT = [
   'Set every field you are not using to null.',
 ].join(' ');
 
-const MAX_CONTEXT_MESSAGES = 20;
+/**
+ * How much of the conversation the model reads. Exported because the automation
+ * fetches exactly this many messages — two independent 20s meant a change to one
+ * silently left the other fetching the wrong window.
+ */
+export const MAX_CONTEXT_MESSAGES = 20;
 /** A pasted log or stack trace would otherwise send tens of thousands of tokens. */
 const MAX_BODY_CHARS = 2000;
 

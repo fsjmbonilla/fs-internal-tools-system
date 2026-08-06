@@ -66,9 +66,19 @@ export const openaiProvider: TriageProvider = {
     const openai = getClient();
     if (!openai) return null;
 
+    const model = config.AI_MODEL || DEFAULT_MODEL;
+    // Report the attempt even if the call throws below: it was dispatched, so it
+    // is billable and it must consume the channel's interval.
+    let reported = false;
+    const report = (promptTokens = 0, completionTokens = 0) => {
+      if (reported) return;
+      reported = true;
+      input.onUsage?.({ provider: 'openai', model, promptTokens, completionTokens });
+    };
+
     try {
       const completion = await openai.chat.completions.create({
-        model: config.AI_MODEL || DEFAULT_MODEL,
+        model,
         max_completion_tokens: MAX_COMPLETION_TOKENS,
         response_format: RESPONSE_FORMAT,
         messages: [
@@ -76,6 +86,8 @@ export const openaiProvider: TriageProvider = {
           { role: 'user', content: transcriptOf(input.messages) },
         ],
       });
+
+      report(completion.usage?.prompt_tokens, completion.usage?.completion_tokens);
 
       const choice = completion.choices[0];
       const content = choice?.message?.content;
@@ -92,6 +104,7 @@ export const openaiProvider: TriageProvider = {
       return parsed.data;
     } catch (err) {
       // Fail-soft on everything (network, 4xx/5xx, malformed JSON): chat must never break.
+      report();
       logger.error({ err }, 'AI triage failed');
       return null;
     }

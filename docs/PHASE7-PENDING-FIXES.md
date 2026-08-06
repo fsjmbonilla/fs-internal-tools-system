@@ -1,16 +1,16 @@
 # Phase 7 — post-review fixes (mostly applied; a record)
 
-> **Status as of 2026-08-06 — this was originally written as pending work, and most of it
-> has since been fixed.** Phase 7 merged at `b2b9bc9`; both Criticals were fixed in
-> `3afa5df`, and Important 3, 4 and 6 in `a8834fc`. Each item below is tagged with its
-> current state, **verified against the code**, not inferred from commit messages.
+> **Status as of 2026-08-06: every Critical and every Important is now fixed.**
+> Phase 7 merged at `b2b9bc9`; both Criticals in `3afa5df`, Important 3/4/6 in
+> `a8834fc`, and the last three — 5, 7 and 8 — on 2026-08-06 along with four of the
+> Minor items. Each item below is tagged with its state, **verified against the
+> code**, not inferred from commit messages.
 >
-> **Still open: Important 5** (`intakeColumnId` not validated against its project) **and
-> Important 8** (inert `PUT` on a standard channel). Important 7 got its cheap partial fix
-> only. The Minor list is largely unaudited — treat its items as unverified.
+> **Deliberately not done:** `isAiConfigured()` is kept (see the Minor list), and the
+> four frontend/ops items are unstarted. The remaining unticked Minor entries were not
+> re-audited — treat them as unverified rather than as known-open.
 >
-> Read this for *why* each fix looks the way it does. It is history, not a to-do list;
-> the live to-do list is the open-items section of `CLAUDE.md`.
+> Read this for *why* each fix looks the way it does. It is history, not a to-do list.
 
 **Original state when written:** branch `phase-7-ai-support`, 8 commits, not merged. `main`
 was clean at Phase 6 (`67f8cae`). All 8 plan tasks were implemented, task-reviewed, and
@@ -81,10 +81,10 @@ switch. The headline feature is invisible in the running app.
    loop guard. Fix: make it a real upsert (force `isBot: true` on the existing-row path), AND add
    belt-and-braces `if (payload.message.userId === botUserId) return;` in `handleSupportMessage`.
 
-5. **STILL OPEN** (re-verified 2026-08-06) — `resolveSupportBinding` in `routes/channels.ts`
-   still takes a caller-supplied `input.intakeColumnId` at face value; it only derives a column
-   (via `resolveIntakeColumnId`) when the caller omits one. No `columnBelongsToProject` helper
-   exists. **`intakeColumnId` never validated against `projectId`.** `resolveSupportBinding` authorizes the
+5. **FIXED** (2026-08-06) — `columnBelongsToProject()` in `supportConfigService.ts`, called from
+   `resolveSupportBinding` whenever the caller supplies a column; 400 `invalid_support_config`
+   otherwise. Covered both ways in `routes/supportHardening.test.ts`.
+   **`intakeColumnId` never validated against `projectId`.** `resolveSupportBinding` authorizes the
    project but accepts any positive column id, including one from another/invisible project. Tickets
    then get `projectId: A` + a column of project B; since `getBoard` filters by projectId they render
    on NO board — AI tickets silently vanish. Add a `columnBelongsToProject(columnId, projectId)`
@@ -97,18 +97,32 @@ switch. The headline feature is invisible in the running app.
    prevents exactly this. Fix: check `getVisibleProject`; if not visible return `{ supportConfig: null }`
    (do NOT 404 the channel — it is legitimately visible).
 
-7. **PARTIALLY FIXED — the ceiling itself is still open.** The cheap transcript cap landed
-   (`MAX_BODY_CHARS = 2000` in `services/ai/triage.ts`, where the AI code moved in `07515a8`),
-   but there is still no per-channel minimum interval, no daily cap and no cost logging;
-   `express-rate-limit` covers only auth and uploads. Critical 1's fix reduces the exposure.
+7. **FIXED** (2026-08-06). The transcript cap had landed earlier (`MAX_BODY_CHARS` in
+   `services/ai/triage.ts`); the ceiling itself now exists as `services/aiBudgetService.ts`,
+   backed by migration `0013_ai_usage` — one row per dispatched triage, carrying the token
+   counts. `checkAiBudget()` enforces a per-channel minimum interval (`AI_MIN_INTERVAL_MS`,
+   default 60s) and a platform-wide daily cap (`AI_DAILY_CALL_CAP`, default 500); both fail
+   *open* on a DB error, since refusing to answer a support channel because a COUNT failed
+   would be the wrong trade. A dispatched call that then failed is still recorded, so a broken
+   provider is not retried hot. Two suites cover it: `services/aiBudget.test.ts` and
+   `automations/aiSpendCeiling.test.ts`.
+
+   Two things learned building it, worth keeping: the ledger is in the database rather than in
+   memory because a crash loop resetting an in-memory counter would defeat the cap in exactly
+   the situation it exists for; and **both sides of every time comparison stay inside MySQL**
+   (`NOW()`, `CURDATE()`) because drizzle maps a MySQL TIMESTAMP back through UTC — comparing a
+   default-generated `created_at` against a JS `Date` is off by the host's UTC offset, which is
+   zero on a UTC server and eight hours on this workstation.
    **No spend ceiling.** `express-rate-limit` is applied only to auth routes; message send is
    unlimited on REST and socket. The debounce coalesces but doesn't throttle: one message every 6s
    sustains ~600 triage calls/hour at up to ~20k input tokens each. Recommend a per-channel minimum
    interval + a daily cap + cost logging. (Fixing Critical 1 materially reduces this.)
    *Partial cheap fix worth doing now:* cap each transcript body to ~2000 chars in `aiService.ts`.
 
-8. **STILL OPEN** (re-verified 2026-08-06) — the PUT handler checks visibility and ownership,
-   never `kind`. **`PUT /:id/support-config` on a standard channel returns 200 and does nothing** — it writes a
+8. **FIXED** (2026-08-06) — the PUT 400s when `kind !== 'support'`, and the create path now
+   rejects a `supportConfig` sent for a standard channel instead of discarding it behind a 201
+   (the same bug at the other door — it was in the Minor list separately).
+   **`PUT /:id/support-config` on a standard channel returns 200 and does nothing** — it writes a
    config row but never sets `channels.kind`, and nothing else can flip `kind`, so the row is
    permanently inert. Fix: 400 when the channel's `kind !== 'support'`.
 
@@ -117,12 +131,16 @@ switch. The headline feature is invisible in the running app.
 *Not systematically re-audited. Four items were spot-checked on 2026-08-06 and are tagged;
 the rest are as-written in the original review and may or may not still hold.*
 
-- **Still open.** `isAiConfigured()` is dead production code (only tests/mocks reference it).
-- `POST /api/channels` with `kind` standard/omitted + a `supportConfig` body silently discards it — reject.
-- `if (!decision.question) return;` / `if (!decision.title) return;` are silent — should `logger.warn`.
-- **Still open.** Unused `addChannelMember` import in `supportIntake.test.ts`.
-- **Still open.** `MAX_CONTEXT_MESSAGES` (now `services/ai/triage.ts`) and `CONTEXT_MESSAGES`
-  (supportIntake) are duplicated 20s.
+- **Kept deliberately.** `isAiConfigured()` has no production caller, but three suites assert it
+  as the "is a provider configured" predicate alongside `aiProviderName()`. Deleting it would
+  remove tested diagnostic surface for a cosmetic win.
+- **FIXED.** `POST /api/channels` with `kind` standard/omitted + a `supportConfig` body silently
+  discards it — now 400, matching the PUT (Important 8).
+- **FIXED.** `if (!decision.question) return;` / `if (!decision.title) return;` were silent — both
+  now `logger.warn`, since an action named without its payload is a model fault, not a no-op.
+- **FIXED.** Unused `addChannelMember` import in `supportIntake.test.ts`.
+- **FIXED.** The duplicated 20s: `MAX_CONTEXT_MESSAGES` is exported from `services/ai/triage.ts`
+  and the automation fetches exactly that many.
 - **FIXED.** `server/.env.example` now documents `AI_PROVIDER`/`OPENAI_API_KEY`/`AI_MODEL`/
   `SUPPORT_DEBOUNCE_MS`.
 - No pino `redact` config (low risk; OpenAI `APIError` carries response, not request, headers).
@@ -136,10 +154,15 @@ the rest are as-written in the original review and may or may not still hold.*
 
 ## Testing gaps worth closing
 
-- No test asserts the transcript is handed to the AI OLDEST-FIRST (a dropped `.reverse()` silently
-  degrades AI quality while everything still "works"). Trivially assertable from the existing mock.
-- No test for: missing bot user, `create_ticket` with a null title, PUT-on-standard-channel, or a
-  second human message after a ticket is filed (that last one would have caught Critical 1).
+- **CLOSED.** No test asserts the transcript is handed to the AI OLDEST-FIRST (a dropped
+  `.reverse()` silently degrades AI quality while everything still "works") — now asserted in
+  `supportIntake.test.ts`.
+- **PUT-on-standard-channel: CLOSED** (`supportHardening.test.ts`). The second-human-message case
+  is covered at the decision level by `services/aiTerminalAction.test.ts` (the `'none'` action and
+  the prompt that produces it) and, from 2026-08-06, end-to-end by `aiSpendCeiling.test.ts` — where
+  a second message no longer reaches the provider at all, for the independent reason that the
+  interval limit blocks it. **Still untested:** a missing bot user, and `create_ticket` with a null
+  title — both now log a warning rather than returning silently, so they are at least visible.
 
 ## Recommended verification after fixing
 

@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import { tasks, users } from '../db/schema/index.js';
 import { resetDb } from '../db/testUtils.js';
 import { ensureBotUser } from '../services/botService.js';
-import { addChannelMember, createChannel } from '../services/channelService.js';
+import { createChannel } from '../services/channelService.js';
 import { getMessagesBefore, sendMessage } from '../services/messageService.js';
 import { createProject } from '../services/projectService.js';
 import {
@@ -155,5 +155,29 @@ describe('supportIntake', () => {
     await vi.waitFor(() => expect(triageSupportConversation).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 30));
     expect(triageSupportConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the transcript to the AI oldest-first', async () => {
+    // getMessagesBefore returns newest-first. Dropping the .reverse() would still
+    // "work" — a ticket still gets filed — while quietly handing the model the
+    // conversation backwards, which is a silent quality regression nothing else
+    // in this suite would catch.
+    const reporter = await seedUser('reporter6@flowerstore.ph');
+    const { channel } = await seedSupportChannel(reporter, 'help6');
+    triageSupportConversation.mockResolvedValue({
+      action: 'none',
+      question: null,
+      title: null,
+      description: null,
+      priority: null,
+    });
+
+    await sendMessage(channel.id, reporter, 'first');
+    await sendMessage(channel.id, reporter, 'second');
+    await sendMessage(channel.id, reporter, 'third');
+
+    await vi.waitFor(() => expect(triageSupportConversation).toHaveBeenCalled());
+    const [{ messages }] = triageSupportConversation.mock.calls[0];
+    expect(messages.map((m: { body: string }) => m.body)).toEqual(['first', 'second', 'third']);
   });
 });

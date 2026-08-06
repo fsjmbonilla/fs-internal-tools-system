@@ -49,6 +49,12 @@ const EnvSchema = z.object({
   // for one provider. See each provider module for what it picks and why.
   AI_MODEL: z.string().default(''),
   SUPPORT_DEBOUNCE_MS: z.coerce.number().int().nonnegative().default(5000),
+  // The AI spend ceiling. The debounce coalesces a burst into one call but does not
+  // throttle a steady stream, so these two bound the bill: how often any one channel
+  // may be triaged, and how many triages may happen across the platform in a day.
+  // 0 disables either limit — which is a deliberate choice, not the default.
+  AI_MIN_INTERVAL_MS: z.coerce.number().int().nonnegative().default(60_000),
+  AI_DAILY_CALL_CAP: z.coerce.number().int().nonnegative().default(500),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

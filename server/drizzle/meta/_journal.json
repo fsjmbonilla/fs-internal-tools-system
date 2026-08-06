@@ -92,6 +92,13 @@
       "when": 1785937681471,
       "tag": "0012_notes_rich_format",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1785998932593,
+      "tag": "0013_ai_usage",
+      "breakpoints": true
     }
   ]
 }

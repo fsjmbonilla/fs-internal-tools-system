@@ -26,7 +26,7 @@ scope and order.
 
 ```bash
 # server (from server/)
-npm test                  # vitest + supertest against a real MySQL — 252 tests, 55 files
+npm test                  # vitest + supertest against a real MySQL — 269 tests, 57 files
 npx vitest run src/routes/notes.test.ts   # one file
 npm run build              # tsc
 npm run db:generate        # drizzle-kit generate, then rename the file + journal tag
@@ -61,6 +61,14 @@ quotes) and produces thousands of lines of noise. This has already happened once
 5. **Files inherit their parent's visibility** — `GET /api/files/:id` resolves the
    message/task/doc and applies that parent's rule.
 6. **Uploads are verified against their bytes**, not the declared MIME type.
+7. **AI triage costs money, so it goes through `aiBudgetService`.** Every dispatched
+   triage writes an `ai_usage` row with its token counts, and `checkAiBudget()` gates the
+   next one (`AI_MIN_INTERVAL_MS` per channel, `AI_DAILY_CALL_CAP` per day). Any future
+   paid AI call — routines, the script runner — belongs behind the same gate.
+8. **Compare timestamps inside the database, not across the JS boundary.** Drizzle maps
+   a MySQL TIMESTAMP back through UTC, so a `defaultNow()` column read into JS is off by
+   the host's UTC offset — invisible on a UTC server, eight hours wrong on a Manila
+   workstation. Use `NOW()` / `CURDATE()` in the query, as `aiBudgetService` does.
 
 ## Testing conventions
 
@@ -104,11 +112,11 @@ MEDIUMTEXT, `format` enum added, applied to dev). Nothing reads `format` yet.
 
 ### Open items
 
-- **Three Phase 7 leftovers** (details and verified status per item in
-  `docs/PHASE7-PENDING-FIXES.md`): `intakeColumnId` is not validated against its
-  `projectId`; there is an inert `PUT` on a standard (non-support) channel; and there
-  is still no AI spend ceiling — the transcript cap landed, but no per-channel
-  interval, daily cap, or cost logging.
+- **Phase 7 review is closed** as of 2026-08-06 — every Critical and Important is fixed
+  (`docs/PHASE7-PENDING-FIXES.md` tags each one). What is left there is frontend and ops:
+  support channels are not visually distinct in the sidebar, `NewSupportChannelDialog`
+  has no busy state or labels, channel-create and config-upsert are not in one
+  transaction, and nothing in the deploy path runs `seed:bot`.
 - **Deferred by the user:** iOS/Android native push (needs `google-services.json`,
   `GoogleService-Info.plist`, an APNs `.p8`) and the native apps generally — web
   first.

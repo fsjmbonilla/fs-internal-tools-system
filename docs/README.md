@@ -10,7 +10,7 @@ Drizzle ORM (MariaDB local / MySQL 8 prod) backend in `server/`, Dockerized for 
 | --- | --- |
 | [LOCAL-SETUP.md](LOCAL-SETUP.md) | How to get running on a fresh machine: DB creation, `server/.env` contents, migrations, seeds, PM2, and what's expected to fail. |
 | [MASTER-PLAN.md](MASTER-PLAN.md) | The overall product spec and phase roadmap (Phases 0–13): features, database schema, API surface, socket events, and cross-phase risks. The source of truth for *what* we're building. |
-| [PHASE7-PENDING-FIXES.md](PHASE7-PENDING-FIXES.md) | Whole-branch review of Phase 7, kept as a record. Both Criticals and Important 3/4/6 are fixed and merged; **Important 5 and 8 are still open**, and 7 has only its partial fix. Every item is tagged with its verified current state. |
+| [PHASE7-PENDING-FIXES.md](PHASE7-PENDING-FIXES.md) | Whole-branch review of Phase 7, kept as a record. Every Critical and Important is fixed as of 2026-08-06; what remains is frontend and ops. Each item is tagged with its verified state. |
 | [superpowers/plans/](superpowers/plans/) | Per-phase implementation plans (task-by-task, TDD, with exact code). Written before each phase, kept afterwards as a record of what was built and why. **Numbering:** `<date>-phase<N>-<slug>.md` only when `<N>` matches a MASTER-PLAN phase; a hardening pass or design spike gets a descriptive name and no number. |
 
 ## Phase status

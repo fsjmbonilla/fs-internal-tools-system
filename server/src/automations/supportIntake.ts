@@ -1,13 +1,16 @@
 import { config } from '../config.js';
 import { logger } from '../logger.js';
+import { checkAiBudget, recordAiUsage } from '../services/aiBudgetService.js';
 import { triageSupportConversation } from '../services/aiService.js';
+import { MAX_CONTEXT_MESSAGES, type TriageUsage } from '../services/ai/triage.js';
 import { getBotUserId } from '../services/botService.js';
 import { events, type MessageCreatedEvent } from '../services/events.js';
 import { getMessagesBefore, sendMessage } from '../services/messageService.js';
 import { getSupportConfig } from '../services/supportConfigService.js';
 import { createTask } from '../services/taskService.js';
 
-const CONTEXT_MESSAGES = 20;
+// The window the model actually reads, so the fetch and the prompt cannot drift apart.
+const CONTEXT_MESSAGES = MAX_CONTEXT_MESSAGES;
 
 // One pending timer per channel: a burst of rapid messages collapses into a single AI turn.
 const pending = new Map<number, NodeJS.Timeout>();
@@ -59,12 +62,27 @@ async function handleSupportMessage(payload: MessageCreatedEvent): Promise<void>
     return;
   }
 
+  // The spend ceiling. Checked here rather than at the event, so a burst still
+  // collapses through the debounce first and only a real dispatch is counted.
+  const budget = await checkAiBudget(channelId);
+  if (!budget.ok) {
+    logger.warn({ channelId, reason: budget.reason }, 'supportIntake: AI budget reached, skipping triage');
+    return;
+  }
+
   const history = await getMessagesBefore(channelId, null, CONTEXT_MESSAGES);
+  let usage: TriageUsage | undefined;
   const decision = await triageSupportConversation({
     // getMessagesBefore returns newest-first; the AI reads oldest-first.
     messages: [...history].reverse().map((m) => ({ displayName: m.displayName, body: m.body })),
     instructions: supportConfig.instructions,
+    onUsage: (u) => {
+      usage = u;
+    },
   });
+  // Record before acting on the decision: a call that was dispatched is billable
+  // and must consume this channel's interval whatever it decided, or failed to.
+  if (usage) await recordAiUsage(channelId, usage);
   if (!decision) return; // AI unavailable or unusable — chat is unaffected
 
   // Nothing to do: acknowledgements, small talk, or a ticket already filed.
@@ -75,12 +93,20 @@ async function handleSupportMessage(payload: MessageCreatedEvent): Promise<void>
   }
 
   if (decision.action === 'ask_clarification') {
-    if (!decision.question) return;
+    // A decision that names an action but omits its payload is a model fault, not a
+    // no-op. Returning silently made it indistinguishable from "nothing to do".
+    if (!decision.question) {
+      logger.warn({ channelId }, 'supportIntake: ask_clarification with no question — ignoring');
+      return;
+    }
     await sendMessage(channelId, botUserId, decision.question);
     return;
   }
 
-  if (!decision.title) return;
+  if (!decision.title) {
+    logger.warn({ channelId }, 'supportIntake: create_ticket with no title — ignoring');
+    return;
+  }
   const ticket = await createTask({
     projectId: supportConfig.projectId,
     columnId: supportConfig.intakeColumnId,
