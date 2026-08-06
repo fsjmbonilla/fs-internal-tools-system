@@ -7,6 +7,8 @@ import { pool } from './index.js';
 
 const TABLES = [
   'ai_usage',
+  'script_runs',
+  'scripts',
   'sheets',
   'api_tokens',
   'refresh_tokens',

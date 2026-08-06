@@ -61,6 +61,12 @@ const EnvSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().default('http://localhost:4000/api/google/callback'),
+  // The script runner's shared secret. Unset means /api/runner 503s — a runner
+  // that cannot authenticate must fail loudly rather than run unauthenticated.
+  RUNNER_TOKEN: z.string().optional(),
+  // What the runner tells scripts to call. Inside the runner's network this is
+  // the API's internal address, which is also the only egress it is allowed.
+  RUNNER_API_BASE_URL: z.string().default('http://localhost:4000'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

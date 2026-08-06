@@ -19,6 +19,8 @@ import { healthRouter } from './routes/health.js';
 import { notesRouter } from './routes/notes.js';
 import { docsRouter, projectsRouter, tasksRouter } from './routes/projects.js';
 import { pushRouter } from './routes/push.js';
+import { runnerRouter } from './routes/runner.js';
+import { scriptRunsRouter, scriptsRouter } from './routes/scripts.js';
 import { projectSheetsRouter, sheetsRouter } from './routes/sheets.js';
 import { uploadsRouter } from './routes/uploads.js';
 import { usersRouter } from './routes/users.js';
@@ -98,6 +100,9 @@ export function createApp(): express.Express {
   app.use('/api/projects', projectsRouter);
   app.use('/api/docs', docsRouter);
   app.use('/api/sheets', sheetsRouter);
+  app.use('/api/scripts', scriptsRouter);
+  app.use('/api/script-runs', scriptRunsRouter);
+  app.use('/api/runner', runnerRouter);
   app.use('/api/projects/:id/sheets', projectSheetsRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/notes', notesRouter);

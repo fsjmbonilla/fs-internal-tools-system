@@ -19,6 +19,7 @@ scope and order.
 | `server/src/services/` | All business logic. Routes validate and delegate; services never import express. A service that may need to join a caller's transaction takes a trailing `exec: Executor = db` (from `db/index.ts`) and uses it for every query — see `createChannel` / `upsertSupportConfig`. |
 | `server/src/mcp/` | The MCP endpoint. Thin wrappers over services — no business logic here, ever. |
 | `server/src/automations/` | Event-bus listeners (support intake, ticket-status announcements). Registered in `index.ts` at boot, **not** in `createApp()`. |
+| `runner/` | The script sandbox — a **separate service**, and the only thing that executes user-written code. No database credentials; talks to the API over `RUNNER_TOKEN` and, in production, has no other egress. |
 | `server/drizzle/` | Migrations. Rename generated files to describe them (`0011_api_tokens.sql`) and update `meta/_journal.json` to match. |
 | `docs/superpowers/plans/` | Per-phase plans written before the work. Read the relevant one before starting a phase. Name them `<date>-phase<N>-<slug>.md` **only** when `<N>` is that phase's number in `docs/MASTER-PLAN.md`; anything else (a hardening pass, a design spike) gets a descriptive name and no number. |
 
@@ -65,7 +66,12 @@ quotes) and produces thousands of lines of noise. This has already happened once
    triage writes an `ai_usage` row with its token counts, and `checkAiBudget()` gates the
    next one (`AI_MIN_INTERVAL_MS` per channel, `AI_DAILY_CALL_CAP` per day). Any future
    paid AI call — routines, the script runner — belongs behind the same gate.
-8. **Compare timestamps inside the database, not across the JS boundary.** Drizzle maps
+8. **User-written code never runs in the API process.** Scripts are queued; the
+   `runner/` service claims them and executes each in a scratch dir as a child
+   process with a SIGKILL timeout and a `ulimit -v` memory cap, holding a token
+   minted for that run alone and revoked when it ends. Anything that would
+   execute user input belongs behind that boundary, not in `server/`.
+9. **Compare timestamps inside the database, not across the JS boundary.** Drizzle maps
    a MySQL TIMESTAMP back through UTC, so a `defaultNow()` column read into JS is off by
    the host's UTC offset — invisible on a UTC server, eight hours wrong on a Manila
    workstation. Use `NOW()` / `CURDATE()` in the query, as `aiBudgetService` does.
