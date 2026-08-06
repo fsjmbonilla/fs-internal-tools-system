@@ -1,18 +1,9 @@
 import { api } from '@/lib/api';
+import type { Scope } from '@shared/scopes';
 
-/** Kept in step with SCOPES in the server's apiTokenService. */
-export const SCOPES = [
-  'tickets:read',
-  'tickets:write',
-  'chat:read',
-  'chat:write',
-  'docs:read',
-  'docs:write',
-  'sheets:read',
-  'sheets:write',
-] as const;
-
-export type Scope = (typeof SCOPES)[number];
+// The scope vocabulary, imported from the API rather than mirrored. Adding a
+// scope is now one edit in one file instead of two that drift.
+export { SCOPES, type Scope } from '@shared/scopes';
 
 export interface Script {
   id: number;

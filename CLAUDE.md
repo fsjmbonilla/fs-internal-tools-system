@@ -17,6 +17,7 @@ scope and order.
 | `src/` | SPA. `features/<area>/` per domain (chat, kanban, docs, notes, admin, calls, files), `components/ui/` is shadcn. |
 | `server/src/routes/` | HTTP surface. One file per area; every router carries an explicit auth gate. |
 | `server/src/services/` | All business logic. Routes validate and delegate; services never import express. A service that may need to join a caller's transaction takes a trailing `exec: Executor = db` (from `db/index.ts`) and uses it for every query — see `createChannel` / `upsertSupportConfig`. |
+| `server/src/shared/` | The few definitions the SPA needs verbatim (currently the scope vocabulary). Reached from the client via the `@shared/*` alias, so **these files must stay leaves with no imports** — anything they import follows them into the browser bundle. |
 | `server/src/mcp/` | The MCP endpoint. A thin adapter over `services/agentTools.ts` — no business logic here, ever. |
 | `server/src/automations/` | Event-bus listeners (support intake, ticket-status announcements). Registered in `index.ts` at boot, **not** in `createApp()`. |
 | `runner/` | The script sandbox — a **separate service**, and the only thing that executes user-written code. No database credentials; talks to the API over `RUNNER_TOKEN` and, in production, has no other egress. |

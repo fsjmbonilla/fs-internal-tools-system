@@ -16,29 +16,15 @@ const PREFIX = 'fsk_';
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /**
- * The scope vocabulary.
- *
- * Deliberately absent: anything for notes. Notes are private to their owner and
- * `notesRouter` rejects token auth outright; Phase 3 recorded that decision twice
- * so a later phase would not add a scope here by habit. Adding one means
- * revisiting that decision on purpose, not extending this list.
+ * The scope vocabulary lives in `shared/scopes.ts` because the SPA renders
+ * pickers from the same list. Re-exported here so every existing importer — and
+ * the mental model "scopes belong to tokens" — keeps working.
  */
-export const SCOPES = [
-  'tickets:read',
-  'tickets:write',
-  'chat:read',
-  'chat:write',
-  'docs:read',
-  'docs:write',
-  'sheets:read',
-  'sheets:write',
-] as const;
+// Imported *and* re-exported: `export … from` creates no local binding, so this
+// module could not use `Scope` or `isScope` itself — which it does, below.
+import { isScope, SCOPES, type Scope } from '../shared/scopes.js';
 
-export type Scope = (typeof SCOPES)[number];
-
-export function isScope(value: string): value is Scope {
-  return (SCOPES as readonly string[]).includes(value);
-}
+export { isScope, SCOPES, type Scope };
 
 export interface TokenContext {
   tokenId: number;
