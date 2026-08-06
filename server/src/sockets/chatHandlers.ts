@@ -1,5 +1,7 @@
 import type { Server, Socket } from 'socket.io';
-import { getVisibleChannel, isChannelMember } from '../services/channelService.js';
+import { getVisibleChannel } from '../services/channelService.js';
+// The same visibility-then-membership rule the REST routes and agents use.
+import { channelForWriting } from '../services/access.js';
 import { logger } from '../logger.js';
 import { sendMessage, toggleReaction } from '../services/messageService.js';
 import { takeSendToken } from './sendRateLimit.js';
@@ -41,8 +43,9 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
       return;
     }
     try {
-      const channel = await getVisibleChannel(payload.channelId, userId, isAdmin);
-      if (!channel || (!isAdmin && !(await isChannelMember(payload.channelId, userId)))) {
+      // Membership, not just visibility: a public channel is readable by
+      // everyone and writable by the people in it.
+      if (!(await channelForWriting(payload.channelId, { userId, isAdmin }))) {
         ack?.({ ok: false, error: 'not_found' });
         return;
       }

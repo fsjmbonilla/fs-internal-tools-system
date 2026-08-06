@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Server, Socket } from 'socket.io';
 import { db } from '../db/index.js';
 import { users } from '../db/schema/index.js';
-import { getVisibleProject, isProjectMember } from '../services/projectService.js';
+import { projectForReading, projectForWriting } from '../services/access.js';
 import {
   acquireLock,
   getLock,
@@ -26,22 +26,22 @@ import {
 
 type Ack = (result: { ok: boolean; [key: string]: unknown }) => void;
 
+/** A socket acts for a person; access.ts does not care which surface asks. */
+function callerOf(socket: Socket) {
+  return { userId: socket.data.userId as number, isAdmin: socket.data.role === 'admin' };
+}
+
 async function mayView(socket: Socket, sheetId: number): Promise<number | null> {
   const summary = await getSheetSummary(sheetId);
   if (!summary) return null;
-  const project = await getVisibleProject(
-    summary.projectId,
-    socket.data.userId,
-    socket.data.role === 'admin',
-  );
+  const project = await projectForReading(summary.projectId, callerOf(socket));
   return project ? summary.projectId : null;
 }
 
 async function mayEdit(socket: Socket, sheetId: number): Promise<boolean> {
-  const projectId = await mayView(socket, sheetId);
-  if (projectId === null) return false;
-  if (socket.data.role === 'admin') return true;
-  return isProjectMember(projectId, socket.data.userId);
+  const summary = await getSheetSummary(sheetId);
+  if (!summary) return false;
+  return Boolean(await projectForWriting(summary.projectId, callerOf(socket)));
 }
 
 export function registerSheetHandlers(io: Server, socket: Socket): void {

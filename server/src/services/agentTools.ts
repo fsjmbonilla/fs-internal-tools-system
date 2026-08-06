@@ -3,7 +3,7 @@
 // shapes via z.toJSONSchema(). Nothing here is shared with the v3 route schemas.
 import * as z from 'zod/v4';
 import type { Scope } from './apiTokenService.js';
-import { channelForWriting, projectForReading, projectForWriting, type AgentCaller } from './agentAuth.js';
+import { channelForWriting, projectForReading, projectForWriting, type Caller } from './access.js';
 import { listVisibleChannels } from './channelService.js';
 import { listVisibleProjects } from './projectService.js';
 import { createDoc, getDoc, getDocWithAttachments, listDocs, updateDoc } from './docService.js';
@@ -67,13 +67,13 @@ export interface AgentTool<Shape extends z.ZodRawShape = z.ZodRawShape> {
    * it and can have the fuller set.
    */
   unattended: boolean;
-  handler: (input: Record<string, never>, caller: AgentCaller) => Promise<unknown>;
+  handler: (input: Record<string, never>, caller: Caller) => Promise<unknown>;
 }
 
 /** Narrow, so each handler can read its own input without casting at every use. */
 function tool<Shape extends z.ZodRawShape>(
   definition: Omit<AgentTool<Shape>, 'handler'> & {
-    handler: (input: z.infer<z.ZodObject<Shape>>, caller: AgentCaller) => Promise<unknown>;
+    handler: (input: z.infer<z.ZodObject<Shape>>, caller: Caller) => Promise<unknown>;
   },
 ): AgentTool {
   return definition as unknown as AgentTool;

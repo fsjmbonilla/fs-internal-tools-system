@@ -7,7 +7,7 @@ import { requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { SCOPES, type Scope } from '../services/apiTokenService.js';
-import { channelForReading } from '../services/agentAuth.js';
+import { channelForReading } from '../services/access.js';
 import { runRoutine } from '../services/routineRunner.js';
 import {
   isValidSchedule,

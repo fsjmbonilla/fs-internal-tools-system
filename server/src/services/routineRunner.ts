@@ -5,7 +5,7 @@ import { db } from '../db/index.js';
 import { routineRuns, routines } from '../db/schema/index.js';
 import { logger } from '../logger.js';
 import { recordAiUsage } from './aiBudgetService.js';
-import { channelForWriting, type AgentCaller } from './agentAuth.js';
+import { channelForWriting, type Caller } from './access.js';
 // The tools are shared with the MCP endpoint, defined once in agentTools.
 import { isRefusal, jsonSchemaFor, toolsForScopes } from './agentTools.js';
 import { getBotUserId } from './botService.js';
@@ -108,7 +108,7 @@ export async function runRoutine(
   }
   // A routine acts as the bot, never as its owner: its writes must be
   // attributable to an automation, and it must not inherit a person's memberships.
-  const caller: AgentCaller = { userId: botUserId, isAdmin: false };
+  const caller: Caller = { userId: botUserId, isAdmin: false };
 
   // Unattended-only: a routine runs with nobody watching, so it is offered the
   // verbs that make sense on a schedule rather than the full agent surface an

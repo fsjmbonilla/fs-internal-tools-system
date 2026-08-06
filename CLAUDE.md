@@ -67,11 +67,14 @@ quotes) and produces thousands of lines of noise. This has already happened once
    next one (`AI_MIN_INTERVAL_MS` per channel, `AI_DAILY_CALL_CAP` per day). Any future
    paid AI call — routines, the script runner — belongs behind the same gate.
 8. **Agent tools are defined once — `services/agentTools.ts`**, with their
-   authorization in `services/agentAuth.ts`. The MCP endpoint and AI Routines are
+   authorization in `services/access.ts` (shared with the socket handlers). The MCP endpoint and AI Routines are
    both thin adapters over that registry: MCP registers the zod shape, routines
    derive JSON Schema from it. Adding a tool to one surface only is how the two
    drift apart. `unattended: false` withholds a tool from routines — a routine
    runs with nobody watching, an MCP client has a person driving it.
+   `services/access.ts` answers "visible, then member" for every non-REST surface.
+   The **routes deliberately do not use it**: they need the 404-vs-403 distinction,
+   which means checking visibility and membership as two steps that throw.
 9. **User-written code never runs in the API process.** Scripts are queued; the
    `runner/` service claims them and executes each in a scratch dir as a child
    process with a SIGKILL timeout and a `ulimit -v` memory cap, holding a token
