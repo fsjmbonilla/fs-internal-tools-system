@@ -101,10 +101,11 @@ quotes) and produces thousands of lines of noise. This has already happened once
 
 ## Current state (2026-08-06)
 
-**Phases 0–11 are complete.** 12 and 13 (Google Calendar/Gmail, then Drive) have not
-been started. `docs/MASTER-PLAN.md` is the authority on what they contain.
+**Phases 0–12 are code-complete; 13 (Drive) has not been started.**
+`docs/MASTER-PLAN.md` is the authority on what 13 contains. Phase 12's plan is
+`docs/superpowers/plans/2026-08-06-phase12-google-calendar-gmail.md`.
 
-Phases 9–11, all verified in a real browser rather than only by tests:
+Recent phases, all verified in a real browser rather than only by tests:
 
 - **9 — Sheets and rich notes.** Notes are TipTap 3 documents storing ProseMirror JSON
   (`format` is `markdown` for pre-existing notes, a read path only). Native spreadsheets
@@ -114,20 +115,32 @@ Phases 9–11, all verified in a real browser rather than only by tests:
   sandbox. See invariant 9.
 - **11 — AI Routines.** A prompt plus a cron schedule, running a tool-use loop bounded by
   scopes, iterations and a token budget, with a readable transcript per run.
+- **12 — Google Calendar + Gmail.** Per-user connections (encrypted refresh tokens,
+  `withGoogle` broken-grant handling), `/calendar` + `/gmail` UI, four agent tools
+  behind new scopes, and the support-mailbox poller (email → support channel →
+  intake AI files a ticket). Verified in a real browser **up to Google's consent
+  screen only** — see below.
 
-### To pick Phase 12 up
+### Phase 12: what still needs a human (the real-Google pass)
 
-Google OAuth is **already configured**: client id and secret are in the gitignored
-`server/.env`, `config.ts` reads them, and the redirect URI
-(`http://localhost:4000/api/google/callback`) is registered on the client in the Cloud
-console. Nothing is blocked.
+Everything testable without a live Google account is tested (369-line fake behind
+`services/google/port.ts`). Still owed, and needing the real account interactively:
+connect via `/settings` and confirm the agenda shows real events → create an event and
+see it in Google Calendar → send a mail → connect the support mailbox, bind a support
+channel, email it, watch the ticket appear → revoke access from Google's security page
+and confirm the connection goes `broken` + owner is DM'd. `GOOGLE_TOKEN_ENC_KEY` is
+already generated in `server/.env`.
 
-Migration numbering continues at **0017**. The pattern to follow is `googleService.ts`
-for token lifecycle, then `calendarService`/`gmailService`, then the support-mailbox
-poller (croner, watermark-idempotent) — the scheduler from Phase 11 is already there to
-copy from.
+### To pick Phase 13 (Drive) up
 
-### Things to know before touching phases 12–13
+Migration numbering continues at **0018**. Extend `services/google/port.ts` (and
+`fake.ts`) with the Drive verbs — **all Google traffic stays behind that port**; then
+`driveService.ts` follows the `calendarService` shape: `requireConnection('user', id)`
++ `withGoogle(account, fn)`. The user OAuth scopes in `googleService.ts` must gain
+`drive.readonly` + `drive.file`, which means existing connections need a re-consent
+(the connect button already forces `prompt=consent`).
+
+### Things to know before touching phase 13
 
 - **Routines need `ANTHROPIC_API_KEY`.** It is unset, so every routine run currently
   fails with a clear message. Triage is provider-switchable; routines are Claude-only by
@@ -135,9 +148,16 @@ copy from.
 - **SheetJS must stay vendored.** `vendor/xlsx-0.20.3.tgz` plus a package.json
   `overrides` entry. The npm `xlsx` package is frozen at 0.18.5 with two unpatched CVEs —
   do not "fix" this with `npm install xlsx`.
-- **Scaling out needs three things at once**, all currently single-process: Socket.IO
+- **Scaling out needs four things at once**, all currently single-process: Socket.IO
   needs sticky sessions and a Redis adapter, the sheet edit lock is in memory, and one
-  process owns the routine cron timers.
+  process owns the routine cron timers **and the mailbox poller timer**.
+- **Gmail HTML bodies are sanitized server-side** (`sanitize-html`, strict allowlist in
+  `gmailService.ts` — no img, no scripts, http(s)/mailto only). The SPA renders
+  `bodyHtml` with `dangerouslySetInnerHTML` *because* of that guarantee; do not return
+  Google's HTML from any new endpoint without routing it through `sanitizeEmailHtml`.
+- **Whose Google does an agent use?** `Caller.googleUserId` — a routine borrows its
+  owner's connection, an MCP token its creator's. `send_gmail` is `unattended: false`
+  on purpose. See the Phase 12 plan's "design conflicts" section before changing either.
 
 ### Traps found the hard way, all still live
 

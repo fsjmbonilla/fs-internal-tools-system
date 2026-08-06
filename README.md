@@ -100,6 +100,9 @@ start still carrying the development `JWT_SECRET`.
 | `S3_BUCKET` / `AWS_REGION` | — / `us-east-1` | S3 driver |
 | `MEMCACHED_SERVERS` | unset | Unset means the cache layer no-ops |
 | `SEED_ADMIN_PASSWORD` | — | Used by `seed:admin`, so the password stays out of shell history |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | unset | OAuth client from the Cloud console. Unset means Google features are not offered |
+| `GOOGLE_REDIRECT_URI` | `http://localhost:4000/api/google/callback` | Must also be registered on the client in the console |
+| `GOOGLE_TOKEN_ENC_KEY` | unset | `openssl rand -hex 32`; encrypts stored refresh tokens. Part of "is Google configured" — no key, no feature |
 
 ## How authorization works
 
@@ -156,6 +159,14 @@ behind the agent. Consequences worth knowing:
 ### Scopes
 
 `tickets:read` `tickets:write` `chat:read` `chat:write` `docs:read` `docs:write`
+`sheets:read` `sheets:write` `calendar:read` `calendar:write` `gmail:read` `gmail:write`
+
+The four Google scopes are different from the rest in one way: the underlying
+data belongs to a person, not the platform. A tool call uses the Google
+connection of the human who empowered the agent — a routine's owner, a token's
+creator — and refuses if that person never connected Google. `send_gmail` is
+additionally withheld from routines (`unattended: false`): outbound email with
+nobody watching.
 
 Grant the narrowest set that does the job. A token without a scope gets **403
 `insufficient_scope`** — a 403 rather than a 404 because the caller is
