@@ -101,9 +101,11 @@ quotes) and produces thousands of lines of noise. This has already happened once
 
 ## Current state (2026-08-06)
 
-**Phases 0–12 are code-complete; 13 (Drive) has not been started.**
-`docs/MASTER-PLAN.md` is the authority on what 13 contains. Phase 12's plan is
-`docs/superpowers/plans/2026-08-06-phase12-google-calendar-gmail.md`.
+**All master-plan phases (0–13) are code-complete.** What remains is the
+real-Google verification pass (below) and the deferred items (native apps,
+push credentials). Phase plans: `docs/superpowers/plans/2026-08-06-phase12-
+google-calendar-gmail.md` and `…phase13-drive.md` — each records its deliberate
+deviations (no Google Picker JS; share-with-domain deferred).
 
 Recent phases, all verified in a real browser rather than only by tests:
 
@@ -120,27 +122,24 @@ Recent phases, all verified in a real browser rather than only by tests:
   behind new scopes, and the support-mailbox poller (email → support channel →
   intake AI files a ticket). Verified in a real browser **up to Google's consent
   screen only** — see below.
+- **13 — Drive.** Project Files tab bound to a Drive folder (lead-only binding,
+  ids never tokens, browsing/uploading always on the viewer's own connection),
+  `/drive` personal browser, attach-from-Drive as `provider='gdrive'` reference
+  rows (storage_key NULL, CHECK-enforced; invisible to the GC; chips deep-link
+  to webViewLink), `search_drive`/`list_drive_files` behind `drive:read`.
 
-### Phase 12: what still needs a human (the real-Google pass)
+### What still needs a human (the real-Google pass, phases 12+13 together)
 
-Everything testable without a live Google account is tested (369-line fake behind
-`services/google/port.ts`). Still owed, and needing the real account interactively:
-connect via `/settings` and confirm the agenda shows real events → create an event and
-see it in Google Calendar → send a mail → connect the support mailbox, bind a support
-channel, email it, watch the ticket appear → revoke access from Google's security page
-and confirm the connection goes `broken` + owner is DM'd. `GOOGLE_TOKEN_ENC_KEY` is
-already generated in `server/.env`.
+Everything testable without a live Google account is tested against the fake behind
+`services/google/port.ts`. Still owed, interactively: connect via `/settings` (the
+grant now includes Drive) → agenda shows real events → create an event, see it in
+Google Calendar → send a mail → connect the support mailbox, bind a support channel,
+email it, watch the ticket appear → browse `/drive`, bind a project folder, upload
+into it, attach a Drive file to chat → revoke access from Google's security page and
+confirm the connection goes `broken` + owner is DM'd. `GOOGLE_TOKEN_ENC_KEY` is
+already generated in `server/.env`. Migration numbering continues at **0019**.
 
-### To pick Phase 13 (Drive) up
-
-Migration numbering continues at **0018**. Extend `services/google/port.ts` (and
-`fake.ts`) with the Drive verbs — **all Google traffic stays behind that port**; then
-`driveService.ts` follows the `calendarService` shape: `requireConnection('user', id)`
-+ `withGoogle(account, fn)`. The user OAuth scopes in `googleService.ts` must gain
-`drive.readonly` + `drive.file`, which means existing connections need a re-consent
-(the connect button already forces `prompt=consent`).
-
-### Things to know before touching phase 13
+### Things to know
 
 - **Routines need `ANTHROPIC_API_KEY`.** It is unset, so every routine run currently
   fails with a clear message. Triage is provider-switchable; routines are Claude-only by
@@ -158,6 +157,14 @@ Migration numbering continues at **0018**. Extend `services/google/port.ts` (and
 - **Whose Google does an agent use?** `Caller.googleUserId` — a routine borrows its
   owner's connection, an MCP token its creator's. `send_gmail` is `unattended: false`
   on purpose. See the Phase 12 plan's "design conflicts" section before changing either.
+- **A gdrive attachment is a reference, not bytes.** `storage_key` NULL +
+  `drive_file_id` set (CHECK-enforced). The GC and object-deletion paths skip these
+  rows; the Drive file is never ours to delete. Drive enforces its own permissions on
+  open — our visibility rules govern only whether the chip exists for you.
+- **Run vitest from `server/`, never the repo root.** From the root it misses
+  `vitest.config.ts`, and until the `resetDb` guard (which now refuses any DB not
+  named `*_test`) that truncated the dev database. The guard throws; the habit still
+  matters.
 
 ### Traps found the hard way, all still live
 

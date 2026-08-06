@@ -160,6 +160,7 @@ behind the agent. Consequences worth knowing:
 
 `tickets:read` `tickets:write` `chat:read` `chat:write` `docs:read` `docs:write`
 `sheets:read` `sheets:write` `calendar:read` `calendar:write` `gmail:read` `gmail:write`
+`drive:read`
 
 The four Google scopes are different from the rest in one way: the underlying
 data belongs to a person, not the platform. A tool call uses the Google
