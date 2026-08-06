@@ -11,6 +11,9 @@ export interface AttachmentInfo {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  /** 'gdrive' rows are references — the chip deep-links to webViewLink. */
+  provider: 'internal' | 'gdrive';
+  webViewLink: string | null;
 }
 
 export type DocDto = DocRow & { attachments: AttachmentInfo[] };
@@ -26,7 +29,7 @@ export async function getDoc(id: number): Promise<DocRow | null> {
 
 export async function getDocAttachments(docId: number): Promise<AttachmentInfo[]> {
   const rows = await db.select().from(attachments).where(eq(attachments.docId, docId));
-  return rows.map((r) => ({ id: r.id, fileName: r.fileName, mimeType: r.mimeType, sizeBytes: r.sizeBytes }));
+  return rows.map((r) => ({ id: r.id, fileName: r.fileName, mimeType: r.mimeType, sizeBytes: r.sizeBytes, provider: r.provider, webViewLink: r.webViewLink }));
 }
 
 export async function getDocWithAttachments(id: number): Promise<DocDto | null> {

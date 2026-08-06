@@ -30,6 +30,11 @@ const USER_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
+  // Phase 13. Connections made before these existed fail Drive calls with a
+  // scope 403 (NOT invalid_grant) — driveService maps that to its own 409 so
+  // the fix ("reconnect") reaches the user instead of a bare error.
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.file',
   'openid',
   'email',
 ];

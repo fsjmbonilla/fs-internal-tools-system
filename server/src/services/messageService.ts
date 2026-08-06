@@ -21,6 +21,9 @@ export interface AttachmentInfo {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  /** 'gdrive' rows are references — the chip deep-links to webViewLink. */
+  provider: 'internal' | 'gdrive';
+  webViewLink: string | null;
 }
 
 export interface MessageWithAuthor {
@@ -86,7 +89,7 @@ async function hydrateAttachments(messageIds: number[]): Promise<Map<number, Att
   const rows = await db.select().from(attachments).where(inArray(attachments.messageId, messageIds));
   for (const r of rows) {
     const list = map.get(r.messageId!) ?? [];
-    list.push({ id: r.id, fileName: r.fileName, mimeType: r.mimeType, sizeBytes: r.sizeBytes });
+    list.push({ id: r.id, fileName: r.fileName, mimeType: r.mimeType, sizeBytes: r.sizeBytes, provider: r.provider, webViewLink: r.webViewLink });
     map.set(r.messageId!, list);
   }
   return map;

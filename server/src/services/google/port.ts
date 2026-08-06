@@ -64,6 +64,24 @@ export interface GmailListResult {
   nextPageToken: string | null;
 }
 
+export interface DriveFile {
+  id: string;
+  name: string;
+  /** Drive's mime — Google-native files (Docs/Sheets) have vnd.google-apps.* */
+  mimeType: string;
+  isFolder: boolean;
+  webViewLink: string | null;
+  /** Bytes, when Drive knows (Google-native files have no size). */
+  sizeBytes: number | null;
+  modifiedAt: string | null;
+  owner: string | null;
+}
+
+export interface DriveListResult {
+  files: DriveFile[];
+  nextPageToken: string | null;
+}
+
 /** What the support-mailbox poller needs, and nothing more. */
 export interface IngestEmail {
   id: string;
@@ -92,6 +110,17 @@ export interface GooglePort {
   ): Promise<{ id: string }>;
   /** Inbox messages strictly newer than the watermark, oldest first. */
   listMailSince(refreshToken: string, afterInternalDate: number): Promise<IngestEmail[]>;
+
+  /** Browse a folder (folderId, 'root' by default) or search by name/content (q). */
+  listDriveFiles(
+    refreshToken: string,
+    opts: { folderId?: string; q?: string; pageToken?: string },
+  ): Promise<DriveListResult>;
+  getDriveFile(refreshToken: string, fileId: string): Promise<DriveFile | null>;
+  uploadDriveFile(
+    refreshToken: string,
+    input: { folderId: string; name: string; mimeType: string; data: Buffer },
+  ): Promise<DriveFile>;
 }
 
 let activePort: GooglePort | null = null;

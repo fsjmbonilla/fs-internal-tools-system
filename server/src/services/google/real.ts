@@ -1,5 +1,7 @@
 import { calendar, type calendar_v3 } from '@googleapis/calendar';
+import { drive, type drive_v3 } from '@googleapis/drive';
 import { gmail, type gmail_v1 } from '@googleapis/gmail';
+import { Readable } from 'node:stream';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../../config.js';
 import type {
@@ -37,6 +39,31 @@ function calendarApi(refreshToken: string): calendar_v3.Calendar {
 
 function gmailApi(refreshToken: string): gmail_v1.Gmail {
   return gmail({ version: 'v1', auth: oauthClient(refreshToken) as never });
+}
+
+function driveApi(refreshToken: string): drive_v3.Drive {
+  return drive({ version: 'v3', auth: oauthClient(refreshToken) as never });
+}
+
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
+const DRIVE_FIELDS = 'id, name, mimeType, webViewLink, size, modifiedTime, owners(emailAddress)';
+
+function toDriveFile(f: drive_v3.Schema$File): import('./port.js').DriveFile {
+  return {
+    id: f.id ?? '',
+    name: f.name ?? '',
+    mimeType: f.mimeType ?? '',
+    isFolder: f.mimeType === FOLDER_MIME,
+    webViewLink: f.webViewLink ?? null,
+    sizeBytes: f.size != null ? Number(f.size) : null,
+    modifiedAt: f.modifiedTime ?? null,
+    owner: f.owners?.[0]?.emailAddress ?? null,
+  };
+}
+
+/** Escape a value for Drive's query language (single-quoted strings). */
+function driveEscape(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function toEvent(e: calendar_v3.Schema$Event): CalendarEvent {
@@ -235,5 +262,47 @@ export const realGooglePort: GooglePort = {
       }))
       .filter((m) => m.internalDate > afterInternalDate)
       .sort((a, b) => a.internalDate - b.internalDate);
+  },
+
+  async listDriveFiles(refreshToken, opts) {
+    // Search and browse are exclusive on purpose: a name search scoped to one
+    // folder is not what Drive's own UI does either, and mixing the two makes
+    // the query ambiguous.
+    const q = opts.q
+      ? `name contains '${driveEscape(opts.q)}' and trashed = false`
+      : `'${driveEscape(opts.folderId ?? 'root')}' in parents and trashed = false`;
+    const { data } = await driveApi(refreshToken).files.list({
+      q,
+      pageToken: opts.pageToken,
+      pageSize: 50,
+      orderBy: 'folder,name',
+      fields: `nextPageToken, files(${DRIVE_FIELDS})`,
+    });
+    return {
+      files: (data.files ?? []).map(toDriveFile),
+      nextPageToken: data.nextPageToken ?? null,
+    };
+  },
+
+  async getDriveFile(refreshToken, fileId) {
+    try {
+      const { data } = await driveApi(refreshToken).files.get({
+        fileId,
+        fields: DRIVE_FIELDS,
+      });
+      return toDriveFile(data);
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) return null;
+      throw err;
+    }
+  },
+
+  async uploadDriveFile(refreshToken, { folderId, name, mimeType, data }) {
+    const { data: created } = await driveApi(refreshToken).files.create({
+      requestBody: { name, parents: [folderId] },
+      media: { mimeType, body: Readable.from(data) },
+      fields: DRIVE_FIELDS,
+    });
+    return toDriveFile(created);
   },
 };
