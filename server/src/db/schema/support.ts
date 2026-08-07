@@ -35,9 +35,13 @@ export const aiUsage = mysqlTable(
   'ai_usage',
   {
     id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
-    channelId: bigint('channel_id', { mode: 'number', unsigned: true })
-      .notNull()
-      .references(() => channels.id, { onDelete: 'cascade' }),
+    // NULL for calls that have no channel — the script assistant, and any other
+    // paid call made from an admin surface rather than a conversation. Those
+    // rows still count toward the daily cap and share one channel-less interval.
+    channelId: bigint('channel_id', { mode: 'number', unsigned: true }).references(
+      () => channels.id,
+      { onDelete: 'cascade' },
+    ),
     provider: varchar('provider', { length: 32 }).notNull(),
     model: varchar('model', { length: 100 }).notNull(),
     // Zero when the provider reported no usage (a failed or unconfigured call).

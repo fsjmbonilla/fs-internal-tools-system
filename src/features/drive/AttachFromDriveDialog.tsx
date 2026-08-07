@@ -43,7 +43,7 @@ export function AttachFromDriveDialog({
           This attaches a link, not a copy — Drive keeps its own permissions, so someone
           without access to the file in Google may still have to request it there.
         </p>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="min-h-0 flex-1">
           <DriveBrowser
             rootName="My Drive"

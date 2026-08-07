@@ -70,19 +70,23 @@ export function SupportMailboxCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         {!binding?.connected && (
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <p className="text-sm text-muted-foreground">No mailbox connected.</p>
-            <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-              Connect mailbox
+            <Button
+              className="min-h-11 md:min-h-0"
+              onClick={() => connect.mutate()}
+              disabled={connect.isPending}
+            >
+              {connect.isPending ? 'Redirecting…' : 'Connect mailbox'}
             </Button>
           </div>
         )}
         {binding?.connected && (
           <>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <p className="text-sm">
                 {binding.broken ? (
-                  <span className="text-amber-600">
+                  <span className="text-destructive">
                     <span className="font-medium">{binding.email}</span> stopped working —
                     reconnect to resume ingest.
                   </span>
@@ -94,16 +98,22 @@ export function SupportMailboxCard() {
               </p>
               <span className="flex gap-2">
                 {binding.broken && (
-                  <Button size="sm" onClick={() => connect.mutate()}>
+                  <Button size="sm" className="min-h-11 md:min-h-0" onClick={() => connect.mutate()}>
                     Reconnect
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => disconnect.mutate()}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 md:min-h-0"
+                  onClick={() => disconnect.mutate()}
+                  disabled={disconnect.isPending}
+                >
                   Disconnect
                 </Button>
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               {binding.targetChannelId ? (
                 <>
                   <p className="flex-1 text-sm">
@@ -112,14 +122,20 @@ export function SupportMailboxCard() {
                       #{boundChannel?.name ?? binding.targetChannelId}
                     </span>
                   </p>
-                  <Button size="sm" variant="outline" onClick={() => unbind.mutate()}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="min-h-11 md:min-h-0"
+                    onClick={() => unbind.mutate()}
+                    disabled={unbind.isPending}
+                  >
                     Stop delivering
                   </Button>
                 </>
               ) : (
                 <>
                   <Select value={selected} onValueChange={setSelected}>
-                    <SelectTrigger className="flex-1">
+                    <SelectTrigger className="min-h-11 w-full flex-1 sm:w-auto md:min-h-0">
                       <SelectValue placeholder="Pick a support channel…" />
                     </SelectTrigger>
                     <SelectContent>
@@ -132,10 +148,11 @@ export function SupportMailboxCard() {
                   </Select>
                   <Button
                     size="sm"
+                    className="min-h-11 md:min-h-0"
                     disabled={!selected || bind.isPending}
                     onClick={() => bind.mutate(Number(selected))}
                   >
-                    Deliver here
+                    {bind.isPending ? 'Binding…' : 'Deliver here'}
                   </Button>
                 </>
               )}

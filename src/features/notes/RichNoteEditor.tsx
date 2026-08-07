@@ -174,7 +174,13 @@ export function RichNoteEditor({
       )}
       <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-background p-3">
         <EditorContent editor={editor} />
-        {!ready && <p className="text-xs text-muted-foreground">Loading…</p>}
+        {!ready && (
+          <div className="space-y-2" aria-label="Loading note">
+            <div className="h-4 w-3/5 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-2/5 animate-pulse rounded bg-muted" />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -205,7 +211,9 @@ function Toolbar({
       type="button"
       variant={isActive ? 'default' : 'outline'}
       size="sm"
+      className="min-h-11 min-w-11 md:min-h-8 md:min-w-8"
       title={title}
+      aria-label={title}
       aria-pressed={isActive}
       onMouseDown={(e) => e.preventDefault()}
       onClick={run}
@@ -215,7 +223,9 @@ function Toolbar({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    // One scrollable row on phones — wrapping put half the buttons under the
+    // keyboard; md+ has room to wrap.
+    <div className="flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible">
       {item('B', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run(), 'Bold')}
       {item('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run(), 'Italic')}
       {item(
@@ -253,6 +263,7 @@ function Toolbar({
         type="button"
         variant="outline"
         size="sm"
+        className="min-h-11 min-w-11 md:min-h-8 md:min-w-8"
         disabled={uploading}
         title="Insert image"
         onMouseDown={(e) => e.preventDefault()}

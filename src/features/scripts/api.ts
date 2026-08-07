@@ -53,3 +53,19 @@ export const runScript = (id: number) =>
   api<{ run: ScriptRun }>(`/api/scripts/${id}/run`, { method: 'POST' });
 
 export const listRuns = (id: number) => api<{ runs: ScriptRun[] }>(`/api/scripts/${id}/runs`);
+
+export type AssistMode = 'analyze' | 'generate' | 'edit';
+
+/** Ask the AI about a script. `revisedSource` comes back only for mode 'edit',
+ * and only when the reply carried a complete ```python fence. */
+export const assistScript = (body: { source: string; instruction: string; mode: AssistMode }) =>
+  api<{ reply: string; revisedSource: string | null }>('/api/scripts/assist', {
+    method: 'POST',
+    body,
+  });
+
+/** The scripts documentation is a Google Doc — the app stores only the pointer. */
+export const getScriptsDocUrl = () => api<{ url: string | null }>('/api/admin/settings/scripts-doc-url');
+
+export const setScriptsDocUrl = (url: string | null) =>
+  api<{ url: string | null }>('/api/admin/settings/scripts-doc-url', { method: 'PUT', body: { url } });

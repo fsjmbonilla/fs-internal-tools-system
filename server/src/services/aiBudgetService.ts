@@ -1,4 +1,4 @@
-import { and, count, eq, gte, sql } from 'drizzle-orm';
+import { and, count, eq, gte, isNull, sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { aiUsage } from '../db/schema/index.js';
@@ -47,13 +47,20 @@ function intervalAgo(): ReturnType<typeof sql> {
   return sql`NOW() - INTERVAL ${seconds} SECOND`;
 }
 
-export async function checkAiBudget(channelId: number): Promise<BudgetVerdict> {
+/**
+ * `channelId` is null for calls made outside any conversation (the script
+ * assistant). Those share one channel-less interval bucket and count toward the
+ * platform-wide daily cap like everything else.
+ */
+export async function checkAiBudget(channelId: number | null): Promise<BudgetVerdict> {
   try {
     if (config.AI_MIN_INTERVAL_MS > 0) {
+      const sameChannel =
+        channelId === null ? isNull(aiUsage.channelId) : eq(aiUsage.channelId, channelId);
       const [recent] = await db
         .select({ n: count() })
         .from(aiUsage)
-        .where(and(eq(aiUsage.channelId, channelId), gte(aiUsage.createdAt, intervalAgo())));
+        .where(and(sameChannel, gte(aiUsage.createdAt, intervalAgo())));
       if ((recent?.n ?? 0) > 0) return { ok: false, reason: 'interval' };
     }
 
@@ -77,7 +84,7 @@ export async function checkAiBudget(channelId: number): Promise<BudgetVerdict> {
  * not recorded would be retried at full speed, which is the hot loop this is
  * here to prevent.
  */
-export async function recordAiUsage(channelId: number, usage: AiUsageRecord): Promise<void> {
+export async function recordAiUsage(channelId: number | null, usage: AiUsageRecord): Promise<void> {
   try {
     await db.insert(aiUsage).values({
       channelId,

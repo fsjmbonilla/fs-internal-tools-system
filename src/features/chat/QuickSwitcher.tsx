@@ -43,6 +43,7 @@ export function QuickSwitcher({
             .map((c) => (
               <CommandItem
                 key={c.id}
+                className="min-h-11 md:min-h-8"
                 value={c.name ?? ''}
                 onSelect={() => {
                   navigate(`/chat/${c.id}`);
@@ -57,6 +58,7 @@ export function QuickSwitcher({
           {userData?.users.map((u) => (
             <CommandItem
               key={u.id}
+              className="min-h-11 md:min-h-8"
               value={u.displayName}
               onSelect={async () => {
                 const { channel } = await createDm(u.id);

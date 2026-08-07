@@ -55,10 +55,13 @@ export function MessageItem({
           </div>
         )}
       </div>
-      <div className="hidden gap-1 group-hover:flex">
+      {/* Hover-revealed on desktop only; phones have no hover, so the actions
+          stay visible there instead of being unreachable. */}
+      <div className="flex items-start gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
         <button
           type="button"
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="flex min-h-11 min-w-8 items-center justify-center text-xs text-muted-foreground transition-colors hover:text-foreground md:min-h-0 md:min-w-0"
+          aria-label="React with thumbs up"
           onClick={() => sendReaction(message.id, message.channelId, '👍')}
         >
           👍
@@ -66,7 +69,7 @@ export function MessageItem({
         {isAuthor && (
           <button
             type="button"
-            className="text-xs text-muted-foreground hover:text-destructive"
+            className="flex min-h-11 items-center text-xs text-muted-foreground transition-colors hover:text-destructive md:min-h-0"
             onClick={async () => {
               await deleteMessageRest(message.id);
               onDeleted(message.id);

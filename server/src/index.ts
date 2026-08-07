@@ -9,6 +9,7 @@ import { logger } from './logger.js';
 import { runAttachmentGc } from './services/attachmentService.js';
 import { ensureBotUser } from './services/botService.js';
 import { setGooglePort } from './services/google/port.js';
+import { loadIntegrations } from './services/integrationsService.js';
 import { realGooglePort } from './services/google/real.js';
 import { startScheduler } from './services/routineScheduler.js';
 import { registerSocketHandlers } from './sockets/index.js';
@@ -55,6 +56,13 @@ startScheduler().catch((err) => logger.error({ err }, 'could not start the routi
 // Same boot-time rebuild for the support-mailbox poller: armed only when a
 // mailbox connection and a channel binding both exist in the database.
 armMailboxPoller().catch((err) => logger.error({ err }, 'could not arm the mailbox poller'));
+
+// Admin-set integration config (AI provider/model, keys, Firebase) lives in the
+// settings table; load it into the in-memory cache consumers read. Non-fatal:
+// until it loads — or if it cannot — everything falls back to the env vars.
+loadIntegrations().catch((err) =>
+  logger.warn({ err }, 'could not load integration settings — using env vars'),
+);
 
 const GC_INTERVAL_MS = 60 * 60 * 1000;
 const gcTimer = setInterval(() => {

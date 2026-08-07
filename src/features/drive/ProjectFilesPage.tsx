@@ -80,27 +80,34 @@ export function ProjectFilesPage() {
   if (!Number.isFinite(id)) return null;
 
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col p-6">
-      <div className="mb-4 flex items-center justify-between gap-2">
+    <div className="flex h-full w-full flex-col p-3 md:p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Project files</h1>
         {binding?.folder && (
           <div className="flex items-center gap-2">
             <Button
               size="sm"
+              className="min-h-11 md:min-h-0"
               onClick={() => fileInputRef.current?.click()}
               disabled={upload.isPending}
             >
               {upload.isPending ? 'Uploading…' : 'Upload to Drive'}
             </Button>
             {canEdit && (
-              <Button size="sm" variant="outline" onClick={() => unbind.mutate()}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-h-11 md:min-h-0"
+                onClick={() => unbind.mutate()}
+                disabled={unbind.isPending}
+              >
                 Unbind folder
               </Button>
             )}
           </div>
         )}
       </div>
-      {notice && <p className="mb-2 text-sm text-red-600">{notice}</p>}
+      {notice && <p className="mb-2 text-sm text-destructive">{notice}</p>}
       <input
         ref={fileInputRef}
         type="file"
@@ -113,12 +120,14 @@ export function ProjectFilesPage() {
       />
 
       {!binding?.folder && !picking && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center animate-in fade-in duration-200">
           <p className="text-sm text-muted-foreground">
             No Drive folder is bound to this project yet.
           </p>
           {canEdit ? (
-            <Button onClick={() => setPicking(true)}>Bind a Drive folder</Button>
+            <Button className="min-h-11 md:min-h-0" onClick={() => setPicking(true)}>
+              Bind a Drive folder
+            </Button>
           ) : (
             <p className="text-xs text-muted-foreground">A project lead can bind one.</p>
           )}
@@ -139,6 +148,10 @@ export function ProjectFilesPage() {
         <DriveBrowser
           rootName={binding.folder.folderName}
           fetchPage={(opts) => listProjectDriveFiles(id, opts)}
+          onDropFiles={async (files) => {
+            // Same endpoint as the Upload button — lands in the bound folder.
+            for (const file of files) await upload.mutateAsync(file);
+          }}
         />
       )}
     </div>
@@ -164,16 +177,21 @@ function PickFolder({
         }}
         onNavigate={setCurrentFolder}
       />
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {currentFolder && (
           <span className="mr-auto text-sm">
             Selected: <span className="font-medium">{currentFolder.name}</span>
           </span>
         )}
-        <Button variant="outline" size="sm" onClick={onCancel}>
+        <Button variant="outline" size="sm" className="min-h-11 md:min-h-0" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" disabled={!currentFolder} onClick={() => currentFolder && onPick(currentFolder)}>
+        <Button
+          size="sm"
+          className="min-h-11 md:min-h-0"
+          disabled={!currentFolder}
+          onClick={() => currentFolder && onPick(currentFolder)}
+        >
           Bind this folder
         </Button>
       </div>

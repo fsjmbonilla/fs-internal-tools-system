@@ -30,14 +30,15 @@ export function SettingsPage() {
   }, [params, setParams]);
 
   return (
-    <div className="mx-auto flex h-full max-w-2xl flex-col gap-4 overflow-y-auto p-6">
+    <div className="grid h-full w-full items-start gap-4 overflow-y-auto p-4 md:p-6 lg:grid-cols-2">
       <h1 className="text-xl font-semibold">Settings</h1>
       {banner && (
         <p
-          className={`rounded border px-3 py-2 text-sm ${
+          role="status"
+          className={`animate-in rounded border px-3 py-2 text-sm duration-150 fade-in ${
             banner.includes('failed')
-              ? 'border-red-300 bg-red-50 text-red-700'
-              : 'border-green-300 bg-green-50 text-green-700'
+              ? 'border-destructive/30 bg-destructive/10 text-destructive'
+              : 'border-primary/30 bg-primary/10 text-primary'
           }`}
         >
           {banner}

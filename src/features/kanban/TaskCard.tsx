@@ -54,7 +54,7 @@ export function TaskCard({ task, onOpen }: { task: TaskCardData; onOpen: (id: nu
       ref={ref}
       type="button"
       onClick={() => onOpen(task.id)}
-      className={`relative w-full rounded-md border bg-card p-2 text-left text-sm shadow-sm ${
+      className={`relative min-h-11 w-full rounded-md border bg-card p-2 text-left text-sm shadow-sm transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-8 ${
         dragging ? 'opacity-40' : ''
       }`}
     >
@@ -66,7 +66,7 @@ export function TaskCard({ task, onOpen }: { task: TaskCardData; onOpen: (id: nu
             <span
               className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
                 task.priority === 'urgent' || task.priority === 'high'
-                  ? 'bg-red-100 text-red-700'
+                  ? 'bg-destructive/10 text-destructive'
                   : 'bg-muted text-muted-foreground'
               }`}
             >

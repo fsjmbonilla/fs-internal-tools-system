@@ -1,4 +1,4 @@
-import { HardDrive, Paperclip } from 'lucide-react';
+import { HardDrive, Paperclip, SendHorizontal } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { AttachFromDriveDialog } from '@/features/drive/AttachFromDriveDialog';
 import { sendMessage as sendSocketMessage, startTyping, stopTyping } from '@/lib/socket';
@@ -52,7 +52,9 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
   }
 
   return (
-    <div className="border-t p-3">
+    // The extra bottom padding keeps the bar above the iOS home indicator when
+    // the SPA runs inside Capacitor; on desktop the inset is 0 and it collapses.
+    <div className="border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
       {uploadError && (
         <p role="alert" className="mb-2 text-xs text-destructive">
           {uploadError}
@@ -70,7 +72,7 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
       <div className="flex items-end gap-2">
         <button
           type="button"
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent disabled:opacity-50"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50 md:min-h-8 md:min-w-8"
           disabled={uploading}
           onClick={() => fileInputRef.current?.click()}
           aria-label="Attach file"
@@ -80,7 +82,7 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleFilePick} />
         <button
           type="button"
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent md:min-h-8 md:min-w-8"
           onClick={() => setDriveOpen(true)}
           aria-label="Attach from Drive"
           title="Attach from Google Drive"
@@ -104,7 +106,7 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
           }
         />
         <textarea
-          className="flex-1 resize-none rounded-md border bg-background p-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          className="flex-1 resize-none rounded-md border bg-background p-2 text-base outline-none transition-colors focus:ring-1 focus:ring-ring md:text-sm"
           rows={2}
           value={value}
           placeholder="Message…"
@@ -116,6 +118,15 @@ export function MessageInput({ channelId, onSent }: { channelId: number; onSent:
             }
           }}
         />
+        <button
+          type="button"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 md:min-h-8 md:min-w-8"
+          disabled={!value.trim()}
+          onClick={() => void send()}
+          aria-label="Send message"
+        >
+          <SendHorizontal className="size-4" />
+        </button>
       </div>
     </div>
   );

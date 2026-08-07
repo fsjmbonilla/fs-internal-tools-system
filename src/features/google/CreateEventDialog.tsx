@@ -118,7 +118,7 @@ export function CreateEventDialog({
               maxLength={300}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <Label htmlFor="evt-start">Starts</Label>
               <Input
@@ -158,8 +158,12 @@ export function CreateEventDialog({
               rows={3}
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" disabled={create.isPending || !title}>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button
+            type="submit"
+            className="min-h-11 md:min-h-0"
+            disabled={create.isPending || !title}
+          >
             {create.isPending ? 'Creating…' : 'Create event'}
           </Button>
         </form>

@@ -53,7 +53,7 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : '�
 
 export function TokensTab() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['admin', 'tokens'],
     queryFn: () => api<{ tokens: ApiToken[] }>('/api/admin/tokens'),
   });
@@ -133,6 +133,7 @@ export function TokensTab() {
               <Label htmlFor="token-name">Name</Label>
               <Input
                 id="token-name"
+                className="min-h-11 md:min-h-8"
                 placeholder="Claude Code (ops laptop)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -141,7 +142,7 @@ export function TokensTab() {
             <div className="grid gap-1.5">
               <Label htmlFor="token-bot">Acts as</Label>
               <Select value={actsAs} onValueChange={setActsAs}>
-                <SelectTrigger id="token-bot">
+                <SelectTrigger id="token-bot" className="min-h-11 md:min-h-8">
                   <SelectValue placeholder={bots.length ? 'Choose a bot user' : 'No bot user yet'} />
                 </SelectTrigger>
                 <SelectContent>
@@ -168,7 +169,9 @@ export function TokensTab() {
                   key={scope}
                   type="button"
                   size="sm"
+                  className="min-h-11 md:min-h-7"
                   variant={scopes.includes(scope) ? 'default' : 'outline'}
+                  aria-pressed={scopes.includes(scope)}
                   onClick={() => toggleScope(scope)}
                 >
                   {scope}
@@ -184,6 +187,7 @@ export function TokensTab() {
             <Label htmlFor="token-expiry">Expires (optional)</Label>
             <Input
               id="token-expiry"
+              className="min-h-11 md:min-h-8"
               type="date"
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
@@ -196,7 +200,11 @@ export function TokensTab() {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div>
-            <Button disabled={!canCreate || create.isPending} onClick={() => create.mutate()}>
+            <Button
+              className="min-h-11 md:min-h-8"
+              disabled={!canCreate || create.isPending}
+              onClick={() => create.mutate()}
+            >
               {create.isPending ? 'Creating…' : 'Create token'}
             </Button>
           </div>
@@ -204,7 +212,7 @@ export function TokensTab() {
       </Card>
 
       {issued && (
-        <Card className="border-primary">
+        <Card className="animate-in border-primary duration-150 fade-in">
           <CardHeader>
             <CardTitle>Copy this token now</CardTitle>
             <CardDescription>
@@ -219,12 +227,18 @@ export function TokensTab() {
             <div className="flex gap-2">
               <Button
                 type="button"
+                className="min-h-11 md:min-h-8"
                 variant="secondary"
                 onClick={() => void navigator.clipboard?.writeText(issued)}
               >
                 Copy
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setIssued(null)}>
+              <Button
+                type="button"
+                className="min-h-11 md:min-h-8"
+                variant="ghost"
+                onClick={() => setIssued(null)}
+              >
                 I've saved it
               </Button>
             </div>
@@ -240,66 +254,82 @@ export function TokensTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Acts as</TableHead>
-                <TableHead>Scopes</TableHead>
-                <TableHead>Last used</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(data?.tokens ?? []).map((token) => {
-                const state = status(token);
-                return (
-                  <TableRow key={token.id}>
-                    <TableCell className="font-medium">{token.name}</TableCell>
-                    <TableCell>{nameOf(token.actsAsUserId)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {token.scopes.map((scope) => (
-                          <Badge key={scope} variant="outline" className="font-mono text-xs">
-                            {scope}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {when(token.lastUsedAt)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{when(token.expiresAt)}</TableCell>
-                    <TableCell>
-                      <Badge variant={state.variant}>{state.label}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {!token.revokedAt && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          disabled={revoke.isPending}
-                          onClick={() => revoke.mutate(token.id)}
-                        >
-                          Revoke
-                        </Button>
-                      )}
+          {isLoading ? (
+            <div className="grid gap-2" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-11 animate-pulse rounded bg-muted" />
+              ))}
+            </div>
+          ) : (
+            /* Table ships its own overflow-x-auto container — wide rows scroll here, not the page. */
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Acts as</TableHead>
+                  <TableHead>Scopes</TableHead>
+                  <TableHead>Last used</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data?.tokens ?? []).map((token) => {
+                  const state = status(token);
+                  return (
+                    <TableRow key={token.id}>
+                      <TableCell className="font-medium">{token.name}</TableCell>
+                      <TableCell>{nameOf(token.actsAsUserId)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {token.scopes.map((scope) => (
+                            <Badge key={scope} variant="outline" className="font-mono text-xs">
+                              {scope}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {when(token.lastUsedAt)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {when(token.expiresAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={state.variant}>{state.label}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!token.revokedAt && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="min-h-11 md:min-h-7"
+                            variant="ghost"
+                            disabled={revoke.isPending}
+                            onClick={() => {
+                              if (confirm(`Revoke "${token.name}"?`)) revoke.mutate(token.id);
+                            }}
+                          >
+                            {revoke.isPending && revoke.variables === token.id
+                              ? 'Revoking…'
+                              : 'Revoke'}
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {data?.tokens.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      No service tokens yet — create one with the form above.
                     </TableCell>
                   </TableRow>
-                );
-              })}
-              {data?.tokens.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No service tokens yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

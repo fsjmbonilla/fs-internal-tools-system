@@ -44,7 +44,7 @@ export function AttachmentChip({ attachment }: { attachment: AttachmentInfo }) {
         target="_blank"
         rel="noreferrer"
         title="Opens in Google Drive"
-        className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+        className="flex min-h-11 items-center gap-2 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-accent md:min-h-0"
       >
         <span className="truncate">{attachment.fileName}</span>
         <span className="rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
@@ -62,7 +62,7 @@ export function AttachmentChip({ attachment }: { attachment: AttachmentInfo }) {
           previewable ? setPreviewing(true) : window.open(fileUrl(attachment.id), '_blank')
         }
         title={previewable ? 'Preview' : 'Download'}
-        className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs hover:bg-accent"
+        className="flex min-h-11 items-center gap-2 rounded-md border px-2 py-1 text-xs transition-colors hover:bg-accent md:min-h-0"
       >
         <span className="truncate">{attachment.fileName}</span>
         <span className="text-muted-foreground">{formatSize(attachment.sizeBytes)}</span>
@@ -87,7 +87,7 @@ export function AttachmentChip({ attachment }: { attachment: AttachmentInfo }) {
               href={fileUrl(attachment.id)}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-muted-foreground underline"
+              className="inline-flex min-h-11 items-center text-xs text-muted-foreground underline transition-colors hover:text-foreground md:min-h-0"
             >
               Download the original
             </a>

@@ -12,6 +12,7 @@ import { adminRouter } from './routes/admin.js';
 import { authRouter } from './routes/auth.js';
 import { callsRouter } from './routes/calls.js';
 import { channelsRouter, messagesRouter, searchRouter } from './routes/channels.js';
+import { dashboardRouter } from './routes/dashboard.js';
 import { departmentsRouter } from './routes/departments.js';
 import { dmsRouter } from './routes/dms.js';
 import { filesRouter } from './routes/files.js';
@@ -102,6 +103,7 @@ export function createApp(): express.Express {
   app.use('/api/users', usersRouter);
   app.use('/api/admin', adminRouter);
   app.use('/api/departments', departmentsRouter);
+  app.use('/api/dashboard', dashboardRouter);
   app.use('/api/channels', channelsRouter);
   app.use('/api/calls', callsRouter);
   app.use('/api/messages', messagesRouter);

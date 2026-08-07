@@ -70,33 +70,56 @@ export function ProjectBoardPage() {
     });
   }, [id, queryClient, canEdit]);
 
-  if (!data) return null;
+  if (!data) {
+    // Skeleton shaped like the board: a nav strip and three columns.
+    return (
+      <div className="flex h-full flex-col p-4">
+        <div className="mb-3 h-5 w-48 animate-pulse rounded bg-muted" />
+        <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-64 w-[85vw] shrink-0 animate-pulse rounded-md bg-muted md:w-72" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-full flex-col p-4">
+    <div className="flex h-full flex-col p-4 animate-in fade-in duration-150">
       {/* The project's other surfaces. Docs and sheets predate this strip and
           were reachable only via the quick-switcher; Files (Drive) arrives with
           Phase 13 and needs a visible way in. */}
-      <nav className="mb-3 flex gap-3 text-sm">
-        <span className="font-medium">Board</span>
-        <Link to={`/projects/${id}/docs`} className="text-muted-foreground hover:underline">
+      <nav className="mb-3 flex items-center gap-3 text-sm">
+        <span className="flex min-h-11 items-center font-medium md:min-h-0">Board</span>
+        <Link
+          to={`/projects/${id}/docs`}
+          className="flex min-h-11 items-center text-muted-foreground transition-colors hover:text-foreground hover:underline md:min-h-0"
+        >
           Docs
         </Link>
-        <Link to={`/projects/${id}/sheets`} className="text-muted-foreground hover:underline">
+        <Link
+          to={`/projects/${id}/sheets`}
+          className="flex min-h-11 items-center text-muted-foreground transition-colors hover:text-foreground hover:underline md:min-h-0"
+        >
           Sheets
         </Link>
-        <Link to={`/projects/${id}/files`} className="text-muted-foreground hover:underline">
+        <Link
+          to={`/projects/${id}/files`}
+          className="flex min-h-11 items-center text-muted-foreground transition-colors hover:text-foreground hover:underline md:min-h-0"
+        >
           Files
         </Link>
       </nav>
       {canEdit && (
       <div className="mb-3 flex gap-2">
         <Input
+          className="min-h-11 md:min-h-8"
           placeholder="New task title"
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
         />
         <Button
+          className="min-h-11 md:min-h-8"
           disabled={!newTitle.trim()}
           onClick={async () => {
             await api(`/api/projects/${id}/tasks`, {
@@ -111,7 +134,9 @@ export function ProjectBoardPage() {
         </Button>
       </div>
       )}
-      <div className="flex flex-1 gap-3 overflow-x-auto">
+      {/* The only horizontal scroller on the page; on phones each column snaps
+          to fill the viewport, on md+ columns take their fixed width. */}
+      <div className="flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:snap-none">
         {data.columns.map((c) => (
           <BoardColumn
             key={c.id}

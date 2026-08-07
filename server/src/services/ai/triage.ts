@@ -44,12 +44,28 @@ export interface TriageInput {
   onUsage?: (usage: TriageUsage) => void;
 }
 
+/** A generic one-shot text request — the shape behind non-triage paid calls. */
+export interface CompletionInput {
+  system: string;
+  prompt: string;
+  maxTokens: number;
+  /** Same contract as TriageInput.onUsage: once per dispatched (billable) call. */
+  onUsage?: (usage: TriageUsage) => void;
+}
+
 /** Every provider implements this and nothing more. */
 export interface TriageProvider {
   readonly name: 'openai' | 'anthropic';
   isConfigured(): boolean;
   /** Returns null on any failure — chat must keep working without AI. */
   triage(input: TriageInput): Promise<TriageDecision | null>;
+  /**
+   * One plain-text completion (the dashboard's day summary). Unlike triage it
+   * THROWS on failure: its callers are interactive endpoints that surface the
+   * error, not automations that must fail soft. Usage is still reported via
+   * onUsage exactly once per dispatched call.
+   */
+  complete(input: CompletionInput): Promise<string>;
 }
 
 export const BASE_PROMPT = [

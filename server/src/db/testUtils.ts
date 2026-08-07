@@ -1,8 +1,10 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { stopMailboxPoller } from '../automations/mailboxPoller.js';
+import { resetNoteDriveBackup } from '../automations/noteDriveBackup.js';
 import { config } from '../config.js';
 import { resetTokenTouchState } from '../services/apiTokenService.js';
+import { resetIntegrationsCache } from '../services/integrationsCache.js';
 import { stopAllRoutines } from '../services/routineScheduler.js';
 import { resetLocks } from '../services/sheetService.js';
 import { pool } from './index.js';
@@ -10,6 +12,8 @@ import { pool } from './index.js';
 const TABLES = [
   'project_drive_folders',
   'message_email_origins',
+  'gmail_cache',
+  'gmail_sync_state',
   'gmail_ingest_state',
   'google_accounts',
   'ai_usage',
@@ -73,5 +77,10 @@ export async function resetDb(): Promise<void> {
   // keep firing against the next suite's data. The mailbox poller is the same
   // kind of timer with the same failure mode.
   stopAllRoutines();
+  // Debounced note backups are timers keyed by note id — same failure mode.
+  resetNoteDriveBackup();
   stopMailboxPoller();
+  // Integration settings are cached in memory; truncating `settings` without
+  // clearing the cache would leave one suite's provider config governing the next.
+  resetIntegrationsCache();
 }

@@ -77,7 +77,13 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
         <SheetHeader>
           <SheetTitle>{task?.task.title}</SheetTitle>
         </SheetHeader>
-        <div className="grid gap-4 p-4">
+        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
+          {!task && (
+            <div className="grid gap-2">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+              <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+            </div>
+          )}
           {task?.task.description && <p className="text-sm">{task.task.description}</p>}
           <div className="flex items-center justify-between">
             {task?.task.dueDate ? (
@@ -87,7 +93,7 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
             )}
             <button
               type="button"
-              className="text-xs text-muted-foreground underline hover:text-foreground"
+              className="flex min-h-11 items-center text-xs text-muted-foreground underline transition-colors hover:text-foreground md:min-h-0"
               onClick={() => setCalendarOpen(true)}
             >
               Add to calendar
@@ -105,14 +111,14 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
                 <span className="flex items-center gap-1">
                 <button
                   type="button"
-                  className="rounded-md px-1 text-xs text-muted-foreground underline hover:text-foreground"
+                  className="flex min-h-11 items-center rounded-md px-1 text-xs text-muted-foreground underline transition-colors hover:text-foreground md:min-h-0"
                   onClick={() => setDriveOpen(true)}
                 >
                   from Drive
                 </button>
                 <button
                   type="button"
-                  className="rounded-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-50"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50 md:min-h-0 md:min-w-0"
                   disabled={attach.isPending}
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach file"
@@ -142,6 +148,17 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
           <div>
             <h4 className="mb-2 text-sm font-semibold">Comments</h4>
             <div className="grid gap-2">
+              {!commentsData && (
+                <>
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+                </>
+              )}
+              {commentsData?.comments.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No comments yet{canEdit ? ' — write the first one below' : ''}.
+                </p>
+              )}
               {commentsData?.comments.map((c) => (
                 <div key={c.id} className="text-sm">
                   <span className="font-medium">{c.displayName}:</span> {c.body}
@@ -152,10 +169,11 @@ export function TaskDetailSheet({ taskId, onClose }: { taskId: number; onClose: 
               <div className="mt-2 flex gap-2">
                 <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
                 <Button
+                  className="min-h-11 md:min-h-8"
                   disabled={!comment.trim() || addComment.isPending}
                   onClick={() => addComment.mutate()}
                 >
-                  Post
+                  {addComment.isPending ? 'Posting…' : 'Post'}
                 </Button>
               </div>
             )}

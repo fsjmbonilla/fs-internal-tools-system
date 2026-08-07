@@ -3,7 +3,14 @@ import { z } from 'zod';
 import { requireAdmin, requireAuth, requireUserAuth } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
+import { checkAiBudget, recordAiUsage } from '../services/aiBudgetService.js';
+import type { TriageUsage } from '../services/ai/triage.js';
 import { SCOPES, type Scope } from '../services/apiTokenService.js';
+import {
+  AI_NOT_CONFIGURED,
+  assistScript,
+  isScriptAssistConfigured,
+} from '../services/scriptAssistService.js';
 import {
   createScript,
   deleteScript,
@@ -53,6 +60,51 @@ scriptsRouter.post('/', validate(createBody), async (req, res) => {
   const input = req.valid as z.infer<typeof createBody>;
   const script = await createScript({ ...input, userId: req.auth!.userId });
   res.status(201).json({ script });
+});
+
+const assistBody = z.object({
+  source: z.string().max(100_000),
+  instruction: z.string().min(1).max(2000),
+  mode: z.enum(['analyze', 'generate', 'edit']),
+});
+
+/**
+ * The editor's AI assistant. A paid AI call, so it lives behind the same gate
+ * as triage (invariant 7): `checkAiBudget()` before dispatch, an `ai_usage` row
+ * with real token counts after — recorded whatever the call returned, because a
+ * dispatched call is billable either way. An assist belongs to no channel, so
+ * it books against the NULL channel bucket, exactly what a channel-less routine
+ * would use.
+ */
+scriptsRouter.post('/assist', validate(assistBody), async (req, res) => {
+  const input = req.valid as z.infer<typeof assistBody>;
+
+  // Clear failure when the deployment has no AI backend — whichever provider
+  // AI_PROVIDER selects, the same switch triage runs on.
+  if (!isScriptAssistConfigured()) throw new AppError(503, 'ai_unconfigured', AI_NOT_CONFIGURED);
+
+  const budget = await checkAiBudget(null);
+  if (!budget.ok) {
+    throw new AppError(
+      429,
+      'ai_budget_exceeded',
+      budget.reason === 'daily_cap'
+        ? "Today's AI call allowance is used up — try again tomorrow."
+        : 'Another AI call just ran — wait a minute and try again.',
+    );
+  }
+
+  let usage: TriageUsage | undefined;
+  try {
+    const result = await assistScript({ ...input, onUsage: (u) => (usage = u) });
+    if (usage) await recordAiUsage(null, usage);
+    res.json(result);
+  } catch (err) {
+    // Record before failing: the dispatched call must consume the interval, or
+    // a broken provider gets retried at full speed.
+    if (usage) await recordAiUsage(null, usage);
+    throw new AppError(502, 'ai_error', err instanceof Error ? err.message : 'The AI request failed');
+  }
 });
 
 scriptsRouter.get('/:id', async (req, res) => {

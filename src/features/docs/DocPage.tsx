@@ -22,7 +22,7 @@ export function DocPage() {
   const id = Number(docId);
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { data } = useQuery({
+  const { data, isError, refetch } = useQuery({
     queryKey: ['doc', id],
     queryFn: () => api<{ doc: Doc }>(`/api/docs/${id}`),
     enabled: Number.isFinite(id),
@@ -59,22 +59,43 @@ export function DocPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['doc', id] }),
   });
 
-  if (!data) return null;
+  if (isError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+        <p className="text-sm text-muted-foreground">This document could not be loaded.</p>
+        <Button variant="outline" size="sm" className="min-h-11 md:min-h-7" onClick={() => void refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="h-full p-4" aria-hidden="true">
+        <div className="mb-4 h-6 w-48 animate-pulse rounded bg-muted" />
+        <div className="space-y-2">
+          <div className="h-4 w-full animate-pulse rounded bg-muted" />
+          <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-full flex-col p-4">
+    <div className="flex h-full min-h-0 flex-col p-4 animate-in fade-in">
       {attachError && (
         <p role="alert" className="mb-2 text-xs text-destructive">
           {attachError}
         </p>
       )}
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="font-semibold">{data.doc.title}</h2>
-        <div className="flex gap-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="min-w-0 truncate font-semibold">{data.doc.title}</h2>
+        <div className="flex items-center gap-2">
           {canEdit && (
           <button
             type="button"
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 md:min-h-8 md:min-w-8"
             disabled={attach.isPending}
             onClick={() => fileInputRef.current?.click()}
             aria-label="Attach file"
@@ -93,12 +114,22 @@ export function DocPage() {
               if (files.length) attach.mutate(files);
             }}
           />
-          <Button variant="outline" size="sm" onClick={() => setPreview((v) => !v)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-h-11 md:min-h-7"
+            onClick={() => setPreview((v) => !v)}
+          >
             {preview ? 'Edit' : 'Preview'}
           </Button>
           {canEdit && (
-            <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-              Save
+            <Button
+              size="sm"
+              className="min-h-11 md:min-h-7"
+              disabled={save.isPending}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? 'Saving…' : 'Save'}
             </Button>
           )}
         </div>
@@ -111,10 +142,12 @@ export function DocPage() {
         </div>
       )}
       {preview || !canEdit ? (
-        <Markdown content={content} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <Markdown content={content} />
+        </div>
       ) : (
         <textarea
-          className="flex-1 resize-none rounded-md border bg-background p-3 font-mono text-sm outline-none"
+          className="min-h-0 flex-1 resize-none rounded-md border bg-background p-3 font-mono text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
           value={content}
           onChange={(e) => setContent(e.target.value)}
         />

@@ -78,7 +78,7 @@ export function NewChannelDialog({
       <DialogTrigger asChild>
         <button
           type="button"
-          className="rounded p-0.5 text-white/50 hover:bg-white/10 hover:text-white"
+          className="rounded p-0.5 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           aria-label="New channel"
           title="New channel"
         >

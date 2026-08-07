@@ -3,12 +3,22 @@ import { api } from '@/lib/api';
 
 export { SCOPES, type Scope };
 
+/** 'ai' runs the agentic loop; 'drive_script' runs a .py from the owner's Drive in the scripts sandbox. */
+export type RoutineKind = 'ai' | 'drive_script';
+
 export interface Routine {
   id: number;
   name: string;
+  kind: RoutineKind;
   prompt: string;
   schedule: string;
   scopes: Scope[];
+  /** drive_script only: the file to fetch, and its name cached for display. */
+  driveFileId: string | null;
+  driveFileName: string | null;
+  /** drive_script only: what the queued run's token may do — same vocabulary as scripts. */
+  scriptScopes: Scope[] | null;
+  managedScriptId: number | null;
   outputChannelId: number | null;
   enabled: boolean;
   ownerId: number;
@@ -21,7 +31,17 @@ export interface Routine {
 export type TranscriptEntry =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; name: string; input: unknown }
-  | { type: 'tool_result'; name: string; output: unknown };
+  | { type: 'tool_result'; name: string; output: unknown }
+  // drive_script runs: what was queued, then what the sandbox reported back.
+  | { type: 'script_queued'; scriptRunId: number; fileName: string; sourceBytes: number }
+  | {
+      type: 'script_result';
+      status: 'succeeded' | 'failed' | 'timeout';
+      exitCode: number | null;
+      stdout: string;
+      stderr: string;
+      error?: string;
+    };
 
 export interface RoutineRun {
   id: number;
@@ -29,6 +49,8 @@ export interface RoutineRun {
   status: 'running' | 'succeeded' | 'failed' | 'budget_exceeded';
   trigger: 'schedule' | 'manual';
   transcript: TranscriptEntry[] | null;
+  /** drive_script runs: the sandbox run this routine run queued. */
+  scriptRunId: number | null;
   summary: string | null;
   inputTokens: number;
   outputTokens: number;
@@ -42,10 +64,14 @@ export const listRoutines = () => api<{ routines: Routine[] }>('/api/routines');
 
 export const createRoutine = (body: {
   name: string;
-  prompt: string;
+  prompt?: string;
   schedule: string;
   scopes: Scope[];
   outputChannelId?: number | null;
+  kind?: RoutineKind;
+  driveFileId?: string;
+  driveFileName?: string;
+  scriptScopes?: Scope[];
 }) => api<{ routine: Routine }>('/api/routines', { method: 'POST', body });
 
 export const updateRoutine = (id: number, body: Partial<Routine>) =>

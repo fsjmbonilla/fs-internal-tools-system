@@ -1,4 +1,4 @@
-import { config } from '../../config.js';
+import { getAiConfig } from '../integrationsCache.js';
 import { anthropicProvider } from './anthropicProvider.js';
 import { openaiProvider } from './openaiProvider.js';
 import type { TriageProvider } from './triage.js';
@@ -8,9 +8,13 @@ const PROVIDERS: Record<'openai' | 'anthropic', TriageProvider> = {
   anthropic: anthropicProvider,
 };
 
-/** The provider AI_PROVIDER selects. Resolved per call so tests can vary it. */
+/**
+ * The selected provider: the admin-set integrations value if there is one,
+ * else AI_PROVIDER. Resolved per call so a runtime change (or a test varying
+ * the config) takes effect on the next call.
+ */
 export function activeProvider(): TriageProvider {
-  return PROVIDERS[config.AI_PROVIDER] ?? openaiProvider;
+  return PROVIDERS[getAiConfig().provider] ?? openaiProvider;
 }
 
 export { ANTHROPIC_DEFAULT_MODEL } from './anthropicProvider.js';

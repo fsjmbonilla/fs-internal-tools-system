@@ -1,4 +1,4 @@
-import { api } from '@/lib/api';
+import { api, apiUpload } from '@/lib/api';
 
 export interface DriveFile {
   id: string;
@@ -9,6 +9,10 @@ export interface DriveFile {
   sizeBytes: number | null;
   modifiedAt: string | null;
   owner: string | null;
+  thumbnailLink: string | null;
+  shared: boolean;
+  imageWidth: number | null;
+  imageHeight: number | null;
 }
 
 export interface DriveListResult {
@@ -27,6 +31,44 @@ function browseParams(opts: { folderId?: string; q?: string; pageToken?: string 
 
 export const listDriveFiles = (opts: { folderId?: string; q?: string; pageToken?: string } = {}) =>
   api<DriveListResult>(`/api/drive/files${browseParams(opts)}`);
+
+/** Drag a file onto a folder: re-parent it in Drive. */
+export const moveDriveFile = (fileId: string, folderId: string) =>
+  api<{ ok: boolean }>(`/api/drive/files/${encodeURIComponent(fileId)}/move`, {
+    method: 'POST',
+    body: { folderId },
+  });
+
+/** Share with a registered colleague; the server validates domain + registration. */
+export const shareDriveFile = (fileId: string, email: string, role: 'reader' | 'writer') =>
+  api<{ ok: boolean }>(`/api/drive/files/${encodeURIComponent(fileId)}/share`, {
+    method: 'POST',
+    body: { email, role },
+  });
+
+/** Drag-and-drop upload into the caller's own Drive. */
+export const uploadToMyDrive = (file: File, folderId?: string) => {
+  const form = new FormData();
+  form.append('file', file);
+  if (folderId) form.append('folderId', folderId);
+  return apiUpload<{ file: DriveFile }>('/api/drive/files', form);
+};
+
+/**
+ * Overwrite a Drive file's content in place. When the target is Google-native,
+ * Drive converts the upload back — xlsx bytes update the Sheet, markdown
+ * updates the Doc — so the file keeps its id, name and type. The server keeps
+ * the current name regardless of the part's filename.
+ */
+export const updateDriveFileContent = (fileId: string, data: Blob, fileName: string) => {
+  const form = new FormData();
+  form.append('file', new File([data], fileName, { type: data.type }));
+  return apiUpload<{ file: DriveFile }>(
+    `/api/drive/files/${encodeURIComponent(fileId)}/content`,
+    form,
+    'PUT',
+  );
+};
 
 export const getProjectDriveFolder = (projectId: number) =>
   api<{ folder: { folderId: string; folderName: string } | null }>(

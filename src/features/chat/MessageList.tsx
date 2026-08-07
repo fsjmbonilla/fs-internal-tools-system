@@ -14,7 +14,7 @@ export function MessageList({ channelId }: { channelId: number }) {
   // Highest message id already reported as read, so a re-render does not re-POST.
   const lastMarked = useRef<number>(0);
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
     queryKey: ['messages', channelId],
     queryFn: ({ pageParam }) => getMessages(channelId, pageParam),
     initialPageParam: undefined as number | undefined,
@@ -99,6 +99,22 @@ export function MessageList({ channelId }: { channelId: number }) {
       if (!old) return old;
       return { ...old, pages: old.pages.map((p) => ({ messages: p.messages.filter((m) => m.id !== id) })) };
     });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full flex-col justify-end gap-4 overflow-hidden p-4">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="flex animate-pulse gap-3">
+            <div className="size-8 shrink-0 rounded-full bg-muted" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-32 rounded bg-muted" />
+              <div className={`h-3 rounded bg-muted ${i % 2 ? 'w-3/4' : 'w-1/2'}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   return (

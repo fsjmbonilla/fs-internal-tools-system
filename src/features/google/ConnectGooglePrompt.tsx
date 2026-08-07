@@ -10,7 +10,7 @@ export function ConnectGooglePrompt({ error }: { error: ApiError }) {
   const broken = error.code === 'google_connection_broken';
   const notConfigured = error.code === 'google_not_configured';
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center animate-in fade-in duration-200">
       <p className="text-lg font-medium">
         {notConfigured
           ? 'Google is not set up on this server'
@@ -26,7 +26,10 @@ export function ConnectGooglePrompt({ error }: { error: ApiError }) {
             : 'Calendar and Gmail live on your own Google account. Connecting takes a few seconds.'}
       </p>
       {!notConfigured && (
-        <Link to="/settings" className="text-sm font-medium text-primary underline">
+        <Link
+          to="/settings"
+          className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline md:min-h-0"
+        >
           {broken ? 'Reconnect in Settings' : 'Connect in Settings'}
         </Link>
       )}

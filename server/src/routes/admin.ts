@@ -19,7 +19,14 @@ import {
   type Scope,
 } from '../services/apiTokenService.js';
 import { countNotes, transferNotes } from '../services/noteService.js';
-import { getAllowedDomains, setAllowedDomains } from '../services/settingsService.js';
+import {
+  getAllowedDomains,
+  getScriptsDocUrl,
+  setAllowedDomains,
+  setScriptsDocUrl,
+} from '../services/settingsService.js';
+import { getIntegrationsView, updateIntegrations } from '../services/integrationsService.js';
+import { config } from '../config.js';
 
 export const adminRouter = Router();
 // User-only, deliberately. Two reasons: administering the org is not something an
@@ -43,6 +50,105 @@ adminRouter.put('/settings/allowed-domains', validate(domainsBody), async (req, 
   const { domains } = req.valid as z.infer<typeof domainsBody>;
   await setAllowedDomains(domains, req.auth!.userId);
   res.json({ domains: await getAllowedDomains() });
+});
+
+adminRouter.get('/settings/scripts-doc-url', async (_req, res) => {
+  res.json({ url: await getScriptsDocUrl() });
+});
+
+// The scripts documentation lives in Google Drive by policy, so the pointer is
+// pinned to Drive/Docs hosts — an arbitrary link here would quietly move the
+// docs somewhere nobody expects them.
+const scriptsDocBody = z.object({
+  url: z
+    .string()
+    .url()
+    .refine((u) => {
+      const host = new URL(u).host;
+      return (
+        u.startsWith('https://') &&
+        (host === 'drive.google.com' || host === 'docs.google.com')
+      );
+    }, 'must be an https drive.google.com or docs.google.com link')
+    .nullable(),
+});
+
+adminRouter.put('/settings/scripts-doc-url', validate(scriptsDocBody), async (req, res) => {
+  const { url } = req.valid as z.infer<typeof scriptsDocBody>;
+  await setScriptsDocUrl(url, req.auth!.userId);
+  res.json({ url: await getScriptsDocUrl() });
+});
+
+// ─── Integrations (runtime provider config) ─────────────────────────────────
+
+/**
+ * Secrets are write-only across this pair: the GET reports { set, source } per
+ * secret and never a value, and the PUT accepts a string to set one or null to
+ * clear it back to the env fallback. Non-secret fields round-trip normally.
+ */
+adminRouter.get('/settings/integrations', async (_req, res) => {
+  res.json(await getIntegrationsView());
+});
+
+// trim() first so a pasted key with a stray newline neither fails min(1) after
+// storage nor gets stored with whitespace baked in.
+const secretValue = z.string().trim().min(1).max(10_000).nullable();
+// '' from a cleared form field means "unset this field" — normalize it to null.
+const firebaseField = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => (v === '' ? null : v))
+    .nullable();
+
+const integrationsBody = z.object({
+  ai: z
+    .object({
+      provider: z.enum(['openai', 'anthropic']),
+      model: z.string().trim().min(1, 'model must not be empty').max(200),
+    })
+    .nullable()
+    .optional(),
+  firebase: z
+    .object({
+      projectId: firebaseField(200).optional(),
+      clientEmail: firebaseField(320).optional(),
+    })
+    .nullable()
+    .optional(),
+  secrets: z
+    .object({
+      openai_api_key: secretValue.optional(),
+      anthropic_api_key: secretValue.optional(),
+      firebase_private_key: secretValue.optional(),
+    })
+    .optional(),
+});
+
+adminRouter.put('/settings/integrations', validate(integrationsBody), async (req, res) => {
+  const patch = req.valid as z.infer<typeof integrationsBody>;
+  const settingSecret = Object.values(patch.secrets ?? {}).some((v) => typeof v === 'string');
+  if (settingSecret && !config.GOOGLE_TOKEN_ENC_KEY) {
+    // Storing a secret we cannot encrypt is not an option; say what is missing.
+    throw new AppError(
+      503,
+      'encryption_unavailable',
+      'GOOGLE_TOKEN_ENC_KEY is not set, so secrets cannot be stored encrypted',
+    );
+  }
+  await updateIntegrations(patch, req.auth!.userId);
+  // Which keys changed is worth a record; the values never are.
+  logger.info(
+    {
+      actor: req.auth!.userId,
+      ai: patch.ai !== undefined,
+      firebase: patch.firebase !== undefined,
+      secrets: Object.keys(patch.secrets ?? {}),
+    },
+    'integration settings updated',
+  );
+  res.json(await getIntegrationsView());
 });
 
 adminRouter.get('/users', async (_req, res) => {

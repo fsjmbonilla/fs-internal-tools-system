@@ -9,6 +9,7 @@ import { validate } from '../middleware/validate.js';
 import { SCOPES, type Scope } from '../services/apiTokenService.js';
 import { channelForReading } from '../services/access.js';
 import { runRoutine } from '../services/routineRunner.js';
+import { deleteScript } from '../services/scriptService.js';
 import {
   isValidSchedule,
   nextRunAt,
@@ -45,12 +46,38 @@ const scopeSchema = z.enum(SCOPES as unknown as [Scope, ...Scope[]]);
 
 const createBody = z.object({
   name: z.string().min(1).max(200),
-  prompt: z.string().min(1).max(20_000),
+  // Optional at the schema so a drive_script routine can omit it; an 'ai'
+  // routine still cannot — requireKindFields below enforces that.
+  prompt: z.string().min(1).max(20_000).optional(),
   schedule: z.string().min(1).max(120),
   scopes: z.array(scopeSchema).default([]),
   outputChannelId: z.number().int().positive().nullable().optional(),
   enabled: z.boolean().optional(),
+  kind: z.enum(['ai', 'drive_script']).optional(),
+  driveFileId: z.string().min(1).max(120).nullable().optional(),
+  /** Display only — the picker knows the name, the id alone is unreadable. */
+  driveFileName: z.string().min(1).max(300).nullable().optional(),
+  /** Scopes the queued script run's token will carry — same vocabulary as scripts. */
+  scriptScopes: z.array(scopeSchema).nullable().optional(),
 });
+
+/**
+ * What each kind requires, checked against the row as it will be after the
+ * write — a patch may change `kind` without resending the fields the new kind
+ * needs, or blank a field the current kind depends on.
+ */
+function requireKindFields(effective: {
+  kind: 'ai' | 'drive_script';
+  prompt: string | null | undefined;
+  driveFileId: string | null | undefined;
+}): void {
+  if (effective.kind === 'ai' && !effective.prompt) {
+    throw new AppError(400, 'validation_error', 'An AI routine needs a prompt');
+  }
+  if (effective.kind === 'drive_script' && !effective.driveFileId) {
+    throw new AppError(400, 'validation_error', 'A Drive script routine needs a driveFileId');
+  }
+}
 
 /**
  * Reject a schedule croner cannot parse, and an output channel the caller cannot
@@ -85,15 +112,21 @@ routinesRouter.get('/', async (req, res) => {
 
 routinesRouter.post('/', validate(createBody), async (req, res) => {
   const input = req.valid as z.infer<typeof createBody>;
+  const kind = input.kind ?? 'ai';
+  requireKindFields({ kind, prompt: input.prompt, driveFileId: input.driveFileId });
   await validateInput(input, req.auth!.userId, req.auth!.role === 'admin');
 
   const [{ id }] = await db
     .insert(routines)
     .values({
       name: input.name,
-      prompt: input.prompt,
+      kind,
+      prompt: input.prompt ?? '',
       schedule: input.schedule,
       scopes: input.scopes,
+      driveFileId: input.driveFileId ?? null,
+      driveFileName: input.driveFileName ?? null,
+      scriptScopes: input.scriptScopes ?? null,
       outputChannelId: input.outputChannelId ?? null,
       enabled: input.enabled ?? true,
       ownerId: req.auth!.userId,
@@ -117,8 +150,13 @@ const patchBody = createBody.partial();
 
 routinesRouter.patch('/:id', validate(patchBody), async (req, res) => {
   const id = parseId(req.params.id);
-  await requireOwnRoutine(id, req.auth!.userId, req.auth!.role === 'admin');
+  const existing = await requireOwnRoutine(id, req.auth!.userId, req.auth!.role === 'admin');
   const input = req.valid as z.infer<typeof patchBody>;
+  requireKindFields({
+    kind: input.kind ?? existing.kind,
+    prompt: input.prompt !== undefined ? input.prompt : existing.prompt,
+    driveFileId: input.driveFileId !== undefined ? input.driveFileId : existing.driveFileId,
+  });
   await validateInput(input, req.auth!.userId, req.auth!.role === 'admin');
 
   await db.update(routines).set(input).where(eq(routines.id, id));
@@ -131,9 +169,12 @@ routinesRouter.patch('/:id', validate(patchBody), async (req, res) => {
 
 routinesRouter.delete('/:id', async (req, res) => {
   const id = parseId(req.params.id);
-  await requireOwnRoutine(id, req.auth!.userId, req.auth!.role === 'admin');
+  const row = await requireOwnRoutine(id, req.auth!.userId, req.auth!.role === 'admin');
   unscheduleRoutine(id);
   await db.delete(routines).where(eq(routines.id, id));
+  // A drive_script routine's managed scripts row exists only to feed the
+  // runner; without the routine it is an orphan, so it goes too.
+  if (row.managedScriptId !== null) await deleteScript(row.managedScriptId);
   res.json({ ok: true });
 });
 

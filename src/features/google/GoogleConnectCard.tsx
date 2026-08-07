@@ -44,12 +44,16 @@ export function GoogleConnectCard() {
           you own) can use it.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex items-center justify-between gap-4">
+      <CardContent className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         {!connected && (
           <>
             <p className="text-sm text-muted-foreground">Not connected.</p>
-            <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-              Connect Google
+            <Button
+              className="min-h-11 md:min-h-0"
+              onClick={() => connect.mutate()}
+              disabled={connect.isPending}
+            >
+              {connect.isPending ? 'Redirecting…' : 'Connect Google'}
             </Button>
           </>
         )}
@@ -60,21 +64,26 @@ export function GoogleConnectCard() {
             </p>
             <Button
               variant="outline"
+              className="min-h-11 md:min-h-0"
               onClick={() => disconnect.mutate()}
               disabled={disconnect.isPending}
             >
-              Disconnect
+              {disconnect.isPending ? 'Disconnecting…' : 'Disconnect'}
             </Button>
           </>
         )}
         {connected && broken && (
           <>
-            <p className="text-sm text-amber-600">
+            <p className="text-sm text-destructive">
               The connection to <span className="font-medium">{email}</span> stopped working
               — reconnect to resume.
             </p>
-            <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
-              Reconnect
+            <Button
+              className="min-h-11 md:min-h-0"
+              onClick={() => connect.mutate()}
+              disabled={connect.isPending}
+            >
+              {connect.isPending ? 'Redirecting…' : 'Reconnect'}
             </Button>
           </>
         )}

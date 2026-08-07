@@ -82,7 +82,7 @@ export function TransferNotesDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="min-h-11 md:min-h-7">
           Transfer notes
         </Button>
       </DialogTrigger>
@@ -96,7 +96,9 @@ export function TransferNotesDialog({
             <p className="text-sm">
               {done === 0 ? 'That account had no notes.' : `Moved ${done} note(s).`}
             </p>
-            <Button onClick={() => setOpen(false)}>Close</Button>
+            <Button className="min-h-11 md:min-h-8" onClick={() => setOpen(false)}>
+              Close
+            </Button>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -109,7 +111,7 @@ export function TransferNotesDialog({
               {count === undefined ? 'Counting…' : `${count} note(s) will move.`}
             </p>
             <Select value={toUserId} onValueChange={setToUserId}>
-              <SelectTrigger aria-label="New owner">
+              <SelectTrigger aria-label="New owner" className="min-h-11 md:min-h-8">
                 <SelectValue placeholder="New owner" />
               </SelectTrigger>
               <SelectContent>
@@ -126,6 +128,7 @@ export function TransferNotesDialog({
               </p>
             )}
             <Button
+              className="min-h-11 md:min-h-8"
               disabled={!toUserId || transfer.isPending || count === 0}
               onClick={() => transfer.mutate()}
             >

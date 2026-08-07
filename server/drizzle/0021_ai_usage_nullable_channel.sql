@@ -1,0 +1,1 @@
+ALTER TABLE `ai_usage` MODIFY COLUMN `channel_id` bigint unsigned;

@@ -46,6 +46,33 @@ export function refreshOnce(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/** Multipart sibling of api(): same base, bearer, refresh-retry and error shape. */
+export async function apiUpload<T>(
+  path: string,
+  form: FormData,
+  method: 'POST' | 'PUT' = 'POST',
+): Promise<T> {
+  const exec = async (): Promise<Response> => {
+    const token = useAuthStore.getState().accessToken;
+    return fetch(`${BASE}${path}`, {
+      method,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+  };
+  let res = await exec();
+  if (res.status === 401 && (await refreshOnce())) res = await exec();
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    throw new ApiError(
+      res.status,
+      payload?.error?.code ?? 'unknown',
+      payload?.error?.message ?? res.statusText,
+    );
+  }
+  return res.json() as Promise<T>;
+}
+
 export async function api<T>(
   path: string,
   opts: { method?: string; body?: unknown; auth?: boolean } = {},

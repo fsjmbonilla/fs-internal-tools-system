@@ -1,9 +1,9 @@
-import { cert, initializeApp } from 'firebase-admin/app';
+import * as firebase from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
-import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { deleteToken, getTokensForUsers } from './deviceTokenService.js';
 import { filterOffline } from './presence.js';
+import { getFirebaseConfig } from './integrationsCache.js';
 
 const FCM_MAX_BATCH_SIZE = 500;
 
@@ -13,26 +13,47 @@ export interface PushPayload {
   channelId: number;
 }
 
-let app: ReturnType<typeof initializeApp> | null | undefined;
+let app: ReturnType<typeof firebase.initializeApp> | null = null;
+/** The creds the current app was built from — a change means rebuild. */
+let appCredsSig: string | undefined;
 
-function getApp(): ReturnType<typeof initializeApp> | null {
-  if (app !== undefined) return app;
-  if (!config.FIREBASE_PROJECT_ID || !config.FIREBASE_CLIENT_EMAIL || !config.FIREBASE_PRIVATE_KEY) {
-    app = null; // push disabled — no Firebase credentials configured
-    return app;
+/**
+ * Credentials resolve at send time: the admin-set integrations values if
+ * present, else the FIREBASE_* env vars. The app is memoized per credential
+ * set, so an admin saving new Firebase creds rebuilds the client on the next
+ * push — no restart, no explicit re-init hook.
+ */
+async function getApp(): Promise<ReturnType<typeof firebase.initializeApp> | null> {
+  const { projectId, clientEmail, privateKey } = getFirebaseConfig();
+  if (!projectId || !clientEmail || !privateKey) {
+    if (app) await teardown(); // creds were removed at runtime — stop sending
+    return null; // push disabled — no Firebase credentials configured
   }
-  app = initializeApp({
-    credential: cert({
-      projectId: config.FIREBASE_PROJECT_ID,
-      clientEmail: config.FIREBASE_CLIENT_EMAIL,
-      privateKey: config.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  const sig = `${projectId}\n${clientEmail}\n${privateKey}`;
+  if (app && appCredsSig === sig) return app;
+  if (app) await teardown();
+  app = firebase.initializeApp({
+    credential: firebase.cert({
+      projectId,
+      clientEmail,
+      privateKey: privateKey.replace(/\\n/g, '\n'),
     }),
   });
+  appCredsSig = sig;
   return app;
 }
 
+async function teardown(): Promise<void> {
+  const old = app;
+  app = null;
+  appCredsSig = undefined;
+  // deleteApp frees the default-app name for the rebuild. Optional-called so a
+  // partial firebase-admin mock (the tests stub only initializeApp/cert) works.
+  if (old) await firebase.deleteApp?.(old)?.catch?.(() => undefined);
+}
+
 export async function sendPushToUsers(userIds: number[], payload: PushPayload): Promise<void> {
-  const firebaseApp = getApp();
+  const firebaseApp = await getApp();
   if (!firebaseApp) return; // no-op when unconfigured
 
   const targetUserIds = filterOffline(userIds);

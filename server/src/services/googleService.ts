@@ -30,6 +30,10 @@ const USER_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
+  // Opening a message marks it read in Gmail itself. Connections that predate
+  // this scope fail that call with a scope 403, which gmailService swallows —
+  // the app-side read state still updates; reconnecting grants the rest.
+  'https://www.googleapis.com/auth/gmail.modify',
   // Phase 13. Connections made before these existed fail Drive calls with a
   // scope 403 (NOT invalid_grant) — driveService maps that to its own 409 so
   // the fix ("reconnect") reaches the user instead of a bare error.

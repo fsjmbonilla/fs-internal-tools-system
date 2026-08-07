@@ -1,9 +1,13 @@
 import {
   bigint,
+  boolean,
   customType,
+  index,
   json,
+  mediumtext,
   mysqlEnum,
   mysqlTable,
+  text,
   timestamp,
   uniqueIndex,
   varchar,
@@ -113,3 +117,49 @@ export const messageEmailOrigins = mysqlTable(
   },
   (table) => [uniqueIndex('uq_message_email_origins_gmail_id').on(table.gmailMessageId)],
 );
+
+/**
+ * Per-account inbox cache. The UI reads mail from here; Google is only asked
+ * for messages newer than the account's watermark (and at most once per
+ * throttle window — see gmailService). Bodies are filled in lazily on first
+ * open and kept forever: a Gmail message is immutable, so a cached body never
+ * goes stale. `bodyHtml` is stored ALREADY SANITIZED — nothing may write an
+ * unsanitized body here.
+ */
+export const gmailCache = mysqlTable(
+  'gmail_cache',
+  {
+    id: bigint('id', { mode: 'number', unsigned: true }).autoincrement().primaryKey(),
+    googleAccountId: bigint('google_account_id', { mode: 'number', unsigned: true })
+      .notNull()
+      .references(() => googleAccounts.id, { onDelete: 'cascade' }),
+    messageId: varchar('message_id', { length: 32 }).notNull(),
+    threadId: varchar('thread_id', { length: 32 }).notNull(),
+    fromAddr: varchar('from_addr', { length: 512 }).notNull(),
+    toAddr: varchar('to_addr', { length: 1024 }).notNull().default(''),
+    subject: varchar('subject', { length: 1024 }).notNull().default(''),
+    snippet: text('snippet').notNull(),
+    /** Gmail's internalDate in ms — ordering and the watermark use Gmail's clock. */
+    internalDate: bigint('internal_date', { mode: 'number', unsigned: true }).notNull(),
+    unread: boolean('unread').notNull().default(false),
+    bodyText: mediumtext('body_text'),
+    /** Sanitized by sanitizeEmailHtml BEFORE storage. */
+    bodyHtml: mediumtext('body_html'),
+    bodyFetchedAt: timestamp('body_fetched_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('uq_gmail_cache_account_message').on(table.googleAccountId, table.messageId),
+    index('ix_gmail_cache_account_date').on(table.googleAccountId, table.internalDate),
+  ],
+);
+
+/** One row per account: the sync watermark and when Google was last asked. */
+export const gmailSyncState = mysqlTable('gmail_sync_state', {
+  googleAccountId: bigint('google_account_id', { mode: 'number', unsigned: true })
+    .primaryKey()
+    .references(() => googleAccounts.id, { onDelete: 'cascade' }),
+  /** Highest internalDate (ms, Gmail's clock) already cached. */
+  watermark: bigint('watermark', { mode: 'number', unsigned: true }).notNull().default(0),
+  lastSyncAt: timestamp('last_sync_at').notNull().defaultNow(),
+});

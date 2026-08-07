@@ -53,3 +53,17 @@ export function rejectionMessage(rejected: RejectedFile[]): string | null {
 export function fileUrl(id: number): string {
   return `${BASE}/api/files/${id}`;
 }
+
+/**
+ * Bytes from an app endpoint, with the bearer token a plain <img>/fetch would
+ * not carry. Accepts an API path (`/api/…`) or a full URL.
+ */
+export async function fetchAuthedBytes(pathOrUrl: string): Promise<ArrayBuffer> {
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${BASE}${pathOrUrl}`;
+  const token = useAuthStore.getState().accessToken;
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) throw new Error('That file could not be loaded');
+  return res.arrayBuffer();
+}

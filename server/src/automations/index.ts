@@ -1,4 +1,5 @@
 import { registerLogAutomation } from './logAutomation.js';
+import { registerNoteDriveBackup } from './noteDriveBackup.js';
 import { registerPushAutomation } from './pushAutomation.js';
 import { registerSupportIntake } from './supportIntake.js';
 import { registerTicketStatus } from './ticketStatus.js';
@@ -8,4 +9,5 @@ export function registerAutomations(): void {
   registerPushAutomation();
   registerSupportIntake();
   registerTicketStatus();
+  registerNoteDriveBackup();
 }

@@ -67,11 +67,22 @@ export interface UserSessionsInvalidatedEvent {
   reason: 'deactivated' | 'role_changed';
 }
 
+/**
+ * A note was created or updated. Ids only, deliberately — notes are private
+ * to their owner, so their content never travels the bus; a listener that
+ * needs it must load the note itself under the owner's id.
+ */
+export interface NoteSavedEvent {
+  noteId: number;
+  userId: number;
+}
+
 interface EventMap {
   'task.moved': TaskMovedEvent;
   'message.created': MessageCreatedEvent;
   'access.channelRevoked': ChannelAccessRevokedEvent;
   'access.userSessionsInvalidated': UserSessionsInvalidatedEvent;
+  'note.saved': NoteSavedEvent;
 }
 
 class TypedBus extends EventEmitter {

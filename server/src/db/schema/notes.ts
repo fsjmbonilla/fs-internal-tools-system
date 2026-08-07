@@ -33,6 +33,12 @@ export const notes = mysqlTable('notes', {
    */
   format: mysqlEnum('format', ['markdown', 'rich']).notNull().default('markdown'),
   pinned: boolean('pinned').notNull().default(false),
+  /**
+   * The note's backup copy in the OWNER's own Drive (via their own
+   * connection) — an id in their account, never a token, never shared
+   * storage. NULL until the first successful backup.
+   */
+  driveFileId: varchar('drive_file_id', { length: 64 }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });

@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { scriptRuns, scripts } from '../db/schema/index.js';
+import { routineRuns, scriptRuns, scripts } from '../db/schema/index.js';
 import { logger } from '../logger.js';
 import { createApiToken, revokeApiToken, type Scope } from './apiTokenService.js';
 import { getBotUserId } from './botService.js';
@@ -168,6 +168,58 @@ export async function finishRun(
   // The credential dies with the run. A token that outlived its script would be
   // a standing key with that script's scopes and nobody watching it.
   if (run?.tokenId) await revokeApiToken(run.tokenId);
+
+  await completeLinkedRoutineRun(runId, outcome);
+}
+
+/**
+ * A drive_script routine's run waits as `running` while its queued script run
+ * sits with the runner. When the runner reports back, close the loop: copy the
+ * outcome into the routine run's transcript (so the routine's history stands on
+ * its own, even if the script run is later deleted) and settle its status.
+ */
+async function completeLinkedRoutineRun(
+  scriptRunId: number,
+  outcome: {
+    status: 'succeeded' | 'failed' | 'timeout';
+    exitCode?: number | null;
+    stdout?: string;
+    stderr?: string;
+    error?: string;
+  },
+): Promise<void> {
+  const [linked] = await db
+    .select()
+    .from(routineRuns)
+    .where(and(eq(routineRuns.scriptRunId, scriptRunId), eq(routineRuns.status, 'running')));
+  if (!linked) return;
+
+  const error =
+    outcome.status === 'succeeded'
+      ? null
+      : (outcome.error ??
+        (outcome.status === 'timeout'
+          ? 'The script exceeded its time limit'
+          : `The script exited with code ${outcome.exitCode ?? 'unknown'}`));
+  await db
+    .update(routineRuns)
+    .set({
+      status: outcome.status === 'succeeded' ? 'succeeded' : 'failed',
+      transcript: [
+        ...(linked.transcript ?? []),
+        {
+          type: 'script_result',
+          status: outcome.status,
+          exitCode: outcome.exitCode ?? null,
+          stdout: truncate(outcome.stdout) ?? '',
+          stderr: truncate(outcome.stderr) ?? '',
+          ...(outcome.error ? { error: outcome.error } : {}),
+        },
+      ],
+      error,
+      finishedAt: sql`NOW()`,
+    })
+    .where(eq(routineRuns.id, linked.id));
 }
 
 const MAX_OUTPUT_CHARS = 100_000;

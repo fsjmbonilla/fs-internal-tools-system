@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { attachments, notes } from '../db/schema/index.js';
 import { deleteAttachmentObjectsFor, linkAttachment } from './attachmentService.js';
+import { events } from './events.js';
 import { createDoc, type DocRow } from './docService.js';
 
 export type NoteRow = typeof notes.$inferSelect;
@@ -122,6 +123,7 @@ export async function createNote(
     })
     .$returningId();
   const [row] = await db.select().from(notes).where(eq(notes.id, id));
+  events.emit('note.saved', { noteId: id, userId });
   return row;
 }
 
@@ -135,6 +137,7 @@ export async function updateNote(
     .update(notes)
     .set(patch)
     .where(and(eq(notes.id, id), eq(notes.userId, userId)));
+  events.emit('note.saved', { noteId: id, userId });
   return true;
 }
 

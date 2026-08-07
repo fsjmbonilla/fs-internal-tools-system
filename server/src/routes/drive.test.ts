@@ -92,6 +92,118 @@ describe('personal browse', () => {
   });
 });
 
+describe('in-app export', () => {
+  it('exports a Google Doc as docx bytes; 404 for an unknown file', async () => {
+    const { token } = await connectedUser();
+    const doc = fake.addDriveFile({
+      name: 'Handbook',
+      mimeType: 'application/vnd.google-apps.document',
+    });
+    const res = await request(app)
+      .get(`/api/drive/files/${doc.id}/export`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(res.headers['content-disposition']).toContain('Handbook.docx');
+
+    const missing = await request(app)
+      .get('/api/drive/files/nope/export')
+      .set('Authorization', `Bearer ${token}`);
+    expect(missing.status).toBe(404);
+  });
+});
+
+describe('in-app content update', () => {
+  const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+  it('replaces the file bytes, keeps the name, and returns the refreshed file', async () => {
+    const { token } = await connectedUser();
+    const sheet = fake.addDriveFile({
+      name: 'Inventory',
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+    });
+    const bytes = Buffer.from('edited xlsx bytes');
+
+    const res = await request(app)
+      .put(`/api/drive/files/${sheet.id}/content`)
+      .set(auth(token))
+      .attach('file', bytes, { filename: 'edited.xlsx', contentType: XLSX_MIME });
+    expect(res.status).toBe(200);
+    expect(res.body.file.id).toBe(sheet.id);
+    // A content save is never a rename — the uploaded part's filename is ignored.
+    expect(res.body.file.name).toBe('Inventory');
+    expect(fake.uploads.get(sheet.id)).toEqual(bytes);
+  });
+
+  it('404s for an unknown file id', async () => {
+    const { token } = await connectedUser();
+    const res = await request(app)
+      .put('/api/drive/files/nope/content')
+      .set(auth(token))
+      .attach('file', Buffer.from('x'), { filename: 'x.xlsx', contentType: XLSX_MIME });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects an oversized body with 413 and writes nothing', async () => {
+    const { token } = await connectedUser();
+    const file = fake.addDriveFile({ name: 'big', mimeType: 'application/vnd.google-apps.spreadsheet' });
+    const res = await request(app)
+      .put(`/api/drive/files/${file.id}/content`)
+      .set(auth(token))
+      .attach('file', Buffer.alloc(20 * 1024 * 1024 + 1), {
+        filename: 'big.xlsx',
+        contentType: XLSX_MIME,
+      });
+    expect(res.status).toBe(413);
+    expect(res.body.error.code).toBe('file_too_large');
+    expect(fake.uploads.has(file.id)).toBe(false);
+  });
+});
+
+describe('share with a colleague', () => {
+  it('shares with a registered allowed-domain user; rejects outsiders', async () => {
+    const { token } = await connectedUser();
+    await makeUser(app, { email: 'colleague@flowerstore.ph' });
+    const file = fake.addDriveFile({ name: 'plan.xlsx' });
+    const auth = { Authorization: `Bearer ${token}` };
+
+    await request(app)
+      .post(`/api/drive/files/${file.id}/share`)
+      .set(auth)
+      .send({ email: 'colleague@flowerstore.ph' })
+      .expect(201);
+    expect(fake.shares).toEqual([
+      { fileId: file.id, email: 'colleague@flowerstore.ph', role: 'reader' },
+    ]);
+
+    // Allowed domain but nobody registered under it.
+    const ghost = await request(app)
+      .post(`/api/drive/files/${file.id}/share`)
+      .set(auth)
+      .send({ email: 'ghost@flowerstore.ph' });
+    expect(ghost.status).toBe(400);
+    expect(ghost.body.error.code).toBe('not_registered');
+
+    // Real mailbox, wrong workspace.
+    const outsider = await request(app)
+      .post(`/api/drive/files/${file.id}/share`)
+      .set(auth)
+      .send({ email: 'someone@gmail.com' });
+    expect(outsider.status).toBe(400);
+    expect(outsider.body.error.code).toBe('domain_not_allowed');
+
+    // Not an email at all.
+    await request(app)
+      .post(`/api/drive/files/${file.id}/share`)
+      .set(auth)
+      .send({ email: 'not-an-email' })
+      .expect(400);
+    expect(fake.shares).toHaveLength(1);
+  });
+});
+
 describe('project folder binding', () => {
   it('lead binds a folder; member cannot; non-folder rejected', async () => {
     const lead = await connectedUser();

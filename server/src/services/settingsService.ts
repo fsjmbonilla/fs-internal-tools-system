@@ -18,6 +18,29 @@ export async function setAllowedDomains(domains: string[], updatedBy: number): P
     .onDuplicateKeyUpdate({ set: { value, updatedBy } });
 }
 
+const SCRIPTS_DOC_KEY = 'scripts_doc_url';
+
+/**
+ * The scripts documentation is maintained as a Google Doc/Drive folder, not
+ * in-app content — this setting is just the pointer to it.
+ */
+export async function getScriptsDocUrl(): Promise<string | null> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, SCRIPTS_DOC_KEY));
+  return row ? (row.value as string | null) : null;
+}
+
+export async function setScriptsDocUrl(url: string | null, updatedBy: number): Promise<void> {
+  if (url === null) {
+    // settings.value is NOT NULL — "no docs link" is the absence of the row.
+    await db.delete(settings).where(eq(settings.key, SCRIPTS_DOC_KEY));
+    return;
+  }
+  await db
+    .insert(settings)
+    .values({ key: SCRIPTS_DOC_KEY, value: url, updatedBy })
+    .onDuplicateKeyUpdate({ set: { value: url, updatedBy } });
+}
+
 export async function isEmailAllowed(email: string): Promise<boolean> {
   const domain = email.split('@')[1]?.toLowerCase();
   if (!domain) return false;

@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Markdown } from '@/features/docs/Markdown';
 import { fileToRows } from '@/features/sheets/xlsx';
-import { useAuthStore } from '@/features/auth/authStore';
-import { fileUrl } from '@/lib/uploads';
+import { fetchAuthedBytes, fileUrl } from '@/lib/uploads';
 import { PREVIEWABLE } from './previewable';
 
 /**
@@ -32,22 +31,30 @@ function kindOf(mimeType: string): Kind {
   return PREVIEWABLE.has(mimeType) ? 'sheet' : 'none';
 }
 
-/** The file's bytes. Every fetch carries the bearer token — see Lightbox. */
-async function fetchBytes(attachmentId: number): Promise<ArrayBuffer> {
-  const token = useAuthStore.getState().accessToken;
-  const res = await fetch(fileUrl(attachmentId), {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-  if (!res.ok) throw new Error('That file could not be loaded');
-  return res.arrayBuffer();
-}
-
+/** Uploaded-attachment preview — the original surface, now a thin wrapper. */
 export function OfficePreview({
   attachmentId,
   fileName,
   mimeType,
 }: {
   attachmentId: number;
+  fileName: string;
+  mimeType: string;
+}) {
+  const loadBytes = useCallback(() => fetchAuthedBytes(fileUrl(attachmentId)), [attachmentId]);
+  return <FilePreview loadBytes={loadBytes} fileName={fileName} mimeType={mimeType} />;
+}
+
+/**
+ * The renderer itself, source-agnostic: it only needs a way to get bytes.
+ * Uploaded attachments and Drive exports both land here.
+ */
+export function FilePreview({
+  loadBytes,
+  fileName,
+  mimeType,
+}: {
+  loadBytes: () => Promise<ArrayBuffer>;
   fileName: string;
   mimeType: string;
 }) {
@@ -63,7 +70,7 @@ export function OfficePreview({
 
     (async () => {
       try {
-        const bytes = await fetchBytes(attachmentId);
+        const bytes = await loadBytes();
         if (cancelled) return;
 
         if (kind === 'sheet') {
@@ -96,7 +103,7 @@ export function OfficePreview({
       cancelled = true;
       if (created) URL.revokeObjectURL(created);
     };
-  }, [attachmentId, kind, mimeType]);
+  }, [loadBytes, kind, mimeType]);
 
   if (kind === 'none') {
     return <p className="p-4 text-sm text-muted-foreground">No preview for {fileName}.</p>;

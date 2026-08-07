@@ -1,35 +1,36 @@
-import { python } from '@codemirror/lang-python';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import CodeMirror from '@uiw/react-codemirror';
-import { useEffect, useState } from 'react';
+import { BookOpen, FileCode2, FilePlus2, Loader2, Pencil } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
-  createScript,
-  deleteScript,
-  listRuns,
-  listScripts,
-  runScript,
-  SCOPES,
-  updateScript,
-  type Scope,
-  type Script,
-  type ScriptRun,
-} from './api';
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { listDriveFiles, type DriveFile } from '@/features/drive/api';
+import { DriveBrowser } from '@/features/drive/DriveBrowser';
+import { createScript, getScriptsDocUrl, listScripts, setScriptsDocUrl } from './api';
+import { ScriptEditor } from './ScriptEditor';
 
 /**
- * Automations → Scripts.
+ * Automations → Scripts, laid out like an IDE: a dark explorer rail on the
+ * left (VS Code's explorer, via sidebar tokens in both app themes) and the
+ * editor pane — tabs, toolbar, terminal-style output — on the right.
  *
- * Admin-only, matching the API. The thing worth getting right in this UI is that
- * a script's **scopes are visible next to its code**: the scopes are what the
- * run's token will carry, so whoever approves a script can see what it may do
- * without reading the body and inferring.
+ * Admin-only, matching the API. The thing worth getting right in this UI is
+ * that a script's **scopes are visible next to its code**: the scopes are what
+ * the run's token will carry, so whoever approves a script can see what it may
+ * do without reading the body and inferring.
  */
 
 const STARTER = `"""A script runs server-side in a sandbox.
 
-fs_sdk carries this run's token, which holds only the scopes ticked below.
-A call outside them comes back 403.
+fs_sdk carries this run's token, which holds only the scopes ticked in the
+Scopes panel. A call outside them comes back 403.
 """
 import fs_sdk
 
@@ -37,17 +38,144 @@ for project in fs_sdk.list_projects():
     print(project["id"], project["name"])
 `;
 
+/**
+ * The how-to-write-a-script guide is a Google Doc, maintained in Drive where
+ * staff already edit docs — the app keeps only the link, and setting it means
+ * picking the file in a Drive browser rather than pasting a URL. This page is
+ * admin-only, so the edit affordance needs no extra gating.
+ */
+function ScriptsDocLink() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ['scripts-doc-url'], queryFn: getScriptsDocUrl });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: (url: string | null) => setScriptsDocUrl(url),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scripts-doc-url'] });
+      setDialogOpen(false);
+      setError(null);
+    },
+    onError: () => setError('Must be a drive.google.com or docs.google.com link'),
+  });
+
+  function pick(file: DriveFile) {
+    const link = file.webViewLink;
+    let host = '';
+    try {
+      host = link ? new URL(link).host : '';
+    } catch {
+      // not a URL — fall through to the error below
+    }
+    if (!link || (host !== 'drive.google.com' && host !== 'docs.google.com')) {
+      setError('Pick a Google Docs/Drive file');
+      return;
+    }
+    setError(null);
+    save.mutate(link);
+  }
+
+  const clearing = save.isPending && save.variables === null;
+
+  return (
+    <div className="flex items-center gap-0.5 px-1 pb-1">
+      {data?.url ? (
+        <>
+          <a
+            href={data.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 min-w-0 items-center gap-1.5 rounded px-2 py-1 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:min-h-7"
+          >
+            <BookOpen className="size-4 shrink-0" />
+            <span className="truncate">Documentation</span>
+          </a>
+          <button
+            type="button"
+            aria-label="Change documentation link"
+            title="Change documentation link"
+            onClick={() => {
+              setError(null);
+              setDialogOpen(true);
+            }}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:min-h-7 md:min-w-7"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setDialogOpen(true);
+          }}
+          className="flex min-h-11 items-center gap-1.5 rounded px-2 py-1 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:min-h-7"
+        >
+          <BookOpen className="size-4" />
+          Add docs link
+        </button>
+      )}
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setError(null);
+        }}
+      >
+        <DialogContent className="flex h-[85dvh] flex-col gap-3 sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Scripts documentation</DialogTitle>
+            <DialogDescription>
+              Pick the Google Doc that explains how to write a script — the app stores only the
+              link.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1">
+            <DriveBrowser
+              rootName="My Drive"
+              fetchPage={(opts) => listDriveFiles(opts)}
+              searchable
+              onPickFile={pick}
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            {data?.url && (
+              <Button
+                variant="destructive"
+                disabled={save.isPending}
+                onClick={() => save.mutate(null)}
+              >
+                {clearing ? 'Clearing…' : 'Clear link'}
+              </Button>
+            )}
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export function ScriptsPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({ queryKey: ['scripts'], queryFn: listScripts });
+  const { data, isLoading } = useQuery({ queryKey: ['scripts'], queryFn: listScripts });
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const selected = data?.scripts.find((s) => s.id === selectedId) ?? null;
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['scripts'] });
 
   const create = useMutation({
-    mutationFn: () =>
-      createScript({ name: 'New script', source: STARTER, scopes: [] }),
+    mutationFn: () => createScript({ name: 'New script', source: STARTER, scopes: [] }),
     onSuccess: (res) => {
       invalidate();
       setSelectedId(res.script.id);
@@ -56,34 +184,64 @@ export function ScriptsPage() {
 
   return (
     <div className="flex h-full">
-      <div className="w-64 shrink-0 border-r p-2">
-        <div className="mb-2 flex items-center gap-2">
-          <h1 className="mr-auto text-sm font-semibold">Scripts</h1>
-          <Button size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
-            New
-          </Button>
+      {/* Explorer rail — VS Code's dark explorer via sidebar tokens, in both
+          app themes. < md: one pane at a time — it hides once a script opens. */}
+      <div
+        className={`w-full shrink-0 flex-col overflow-y-auto border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex md:w-60 ${
+          selected ? 'hidden' : 'flex'
+        }`}
+      >
+        <div className="flex items-center gap-1 px-2 py-1">
+          <h1 className="mr-auto text-[11px] font-semibold tracking-widest text-sidebar-foreground/60">
+            SCRIPTS
+          </h1>
+          <button
+            type="button"
+            aria-label="New script"
+            title="New script"
+            disabled={create.isPending}
+            onClick={() => create.mutate()}
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:pointer-events-none disabled:opacity-50 md:min-h-7 md:min-w-7"
+          >
+            {create.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <FilePlus2 className="size-4" />
+            )}
+          </button>
         </div>
-        <ul className="grid gap-1">
+        <ScriptsDocLink />
+        {isLoading && (
+          <div className="grid gap-1 px-1" aria-hidden>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-11 animate-pulse rounded bg-sidebar-accent/50 md:h-7" />
+            ))}
+          </div>
+        )}
+        <ul className="grid gap-px px-1 pb-2">
           {data?.scripts.map((s) => (
             <li key={s.id}>
               <button
                 type="button"
                 onClick={() => setSelectedId(s.id)}
-                className={`w-full rounded px-2 py-1 text-left text-sm hover:bg-muted ${
-                  selectedId === s.id ? 'bg-muted' : ''
+                className={`flex min-h-11 w-full items-center gap-1.5 rounded px-2 py-0.5 text-left text-sm transition-colors hover:bg-sidebar-accent md:min-h-7 ${
+                  selectedId === s.id ? 'bg-sidebar-accent font-medium' : ''
                 }`}
               >
-                {s.name}
+                <FileCode2 className="size-4 shrink-0 text-sidebar-foreground/60" />
+                <span className="truncate">{s.name}</span>
               </button>
             </li>
           ))}
         </ul>
         {data?.scripts.length === 0 && (
-          <p className="text-xs text-muted-foreground">No scripts yet.</p>
+          <p className="px-3 text-xs text-sidebar-foreground/60">
+            No scripts yet — press New to write the first one.
+          </p>
         )}
       </div>
 
-      <div className="min-w-0 flex-1 p-3">
+      <div className={`min-w-0 flex-1 flex-col ${selected ? 'flex' : 'hidden md:flex'}`}>
         {selected ? (
           <ScriptEditor
             key={selected.id}
@@ -93,204 +251,15 @@ export function ScriptsPage() {
               setSelectedId(null);
               invalidate();
             }}
+            onBack={() => setSelectedId(null)}
           />
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="p-4 text-sm text-muted-foreground">
             Select a script, or create one. Scripts run server-side in a sandbox with a hard
             timeout and only the scopes you grant them.
           </p>
         )}
       </div>
-    </div>
-  );
-}
-
-function ScriptEditor({
-  script,
-  onChanged,
-  onDeleted,
-}: {
-  script: Script;
-  onChanged: () => void;
-  onDeleted: () => void;
-}) {
-  const [name, setName] = useState(script.name);
-  const [source, setSource] = useState(script.source);
-  const [scopes, setScopes] = useState<Scope[]>(script.scopes);
-  const [error, setError] = useState<string | null>(null);
-  const [watching, setWatching] = useState(false);
-
-  const runsQuery = useQuery({
-    queryKey: ['script-runs', script.id],
-    queryFn: () => listRuns(script.id),
-    // Only poll while something is in flight. A run takes seconds, and polling
-    // for it forever would be a request every two seconds for nothing.
-    refetchInterval: watching ? 2000 : false,
-  });
-
-  const runs = runsQuery.data?.runs ?? [];
-  const latest = runs[0];
-
-  useEffect(() => {
-    if (latest && (latest.status === 'queued' || latest.status === 'running')) setWatching(true);
-    else setWatching(false);
-  }, [latest]);
-
-  const save = useMutation({
-    mutationFn: () => updateScript(script.id, { name: name.trim() || 'Untitled', source, scopes }),
-    onSuccess: () => {
-      setError(null);
-      onChanged();
-    },
-    onError: (err: unknown) => setError(err instanceof Error ? err.message : 'Could not save'),
-  });
-
-  const run = useMutation({
-    // Save first: running the previous version of code you are looking at is a
-    // confusing way to lose ten minutes.
-    mutationFn: async () => {
-      await updateScript(script.id, { name: name.trim() || 'Untitled', source, scopes });
-      return runScript(script.id);
-    },
-    onSuccess: () => {
-      setWatching(true);
-      void runsQuery.refetch();
-      onChanged();
-    },
-    onError: (err: unknown) => setError(err instanceof Error ? err.message : 'Could not run'),
-  });
-
-  const remove = useMutation({ mutationFn: () => deleteScript(script.id), onSuccess: onDeleted });
-
-  function toggleScope(scope: Scope) {
-    setScopes((current) =>
-      current.includes(scope) ? current.filter((s) => s !== scope) : [...current, scope],
-    );
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <Input
-          className="max-w-72"
-          value={name}
-          aria-label="Script name"
-          onChange={(e) => setName(e.target.value)}
-        />
-        <span className="mr-auto text-xs text-muted-foreground">Python</span>
-        <Button size="sm" variant="outline" disabled={save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? 'Saving…' : 'Save'}
-        </Button>
-        <Button size="sm" disabled={run.isPending} onClick={() => run.mutate()}>
-          {run.isPending ? 'Queueing…' : 'Run'}
-        </Button>
-        <Button size="sm" variant="destructive" onClick={() => remove.mutate()}>
-          Delete
-        </Button>
-      </div>
-
-      <fieldset className="rounded border p-2">
-        <legend className="px-1 text-xs font-medium">
-          Scopes — what this script may do through <code>fs_sdk</code>
-        </legend>
-        <div className="flex flex-wrap gap-3">
-          {SCOPES.map((scope) => (
-            <label key={scope} className="flex items-center gap-1 text-xs">
-              <input
-                type="checkbox"
-                checked={scopes.includes(scope)}
-                onChange={() => toggleScope(scope)}
-              />
-              <code>{scope}</code>
-            </label>
-          ))}
-        </div>
-        {scopes.length === 0 && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            No scopes: the script can compute and print, but every API call will be refused.
-          </p>
-        )}
-      </fieldset>
-
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
-
-      <div className="min-h-0 flex-1 overflow-auto rounded border">
-        <CodeMirror
-          value={source}
-          height="100%"
-          extensions={[python()]}
-          onChange={setSource}
-          basicSetup={{ lineNumbers: true, highlightActiveLine: true }}
-        />
-      </div>
-
-      <RunPanel runs={runs} />
-    </div>
-  );
-}
-
-const STATUS_STYLE: Record<ScriptRun['status'], string> = {
-  queued: 'bg-muted text-muted-foreground',
-  running: 'bg-blue-100 text-blue-900',
-  succeeded: 'bg-green-100 text-green-900',
-  failed: 'bg-red-100 text-red-900',
-  // A runaway reads differently from a bug, so it gets its own colour.
-  timeout: 'bg-amber-100 text-amber-900',
-};
-
-function RunPanel({ runs }: { runs: ScriptRun[] }) {
-  const [openId, setOpenId] = useState<number | null>(null);
-  const open = runs.find((r) => r.id === openId) ?? runs[0];
-
-  if (runs.length === 0) {
-    return <p className="text-xs text-muted-foreground">No runs yet.</p>;
-  }
-
-  return (
-    <div className="max-h-64 shrink-0 overflow-auto rounded border p-2">
-      <div className="mb-2 flex flex-wrap gap-1">
-        {runs.slice(0, 12).map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            onClick={() => setOpenId(r.id)}
-            className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE[r.status]} ${
-              open?.id === r.id ? 'ring-1 ring-foreground/30' : ''
-            }`}
-            title={new Date(r.createdAt).toLocaleString()}
-          >
-            #{r.id} {r.status}
-          </button>
-        ))}
-      </div>
-
-      {open && (
-        <div className="grid gap-1 text-xs">
-          <p className="text-muted-foreground">
-            run #{open.id} · {open.status}
-            {open.exitCode !== null && ` · exit ${open.exitCode}`}
-            {open.finishedAt && ` · ${new Date(open.finishedAt).toLocaleTimeString()}`}
-          </p>
-          {open.error && <p className="text-destructive">{open.error}</p>}
-          {open.stdout && (
-            <pre className="overflow-x-auto rounded bg-muted p-2 whitespace-pre-wrap">
-              {open.stdout}
-            </pre>
-          )}
-          {open.stderr && (
-            <pre className="overflow-x-auto rounded bg-destructive/10 p-2 whitespace-pre-wrap text-destructive">
-              {open.stderr}
-            </pre>
-          )}
-          {!open.stdout && !open.stderr && open.status !== 'queued' && open.status !== 'running' && (
-            <p className="text-muted-foreground">No output.</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

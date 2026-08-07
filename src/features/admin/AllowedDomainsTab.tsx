@@ -8,7 +8,7 @@ import { ApiError, api } from '@/lib/api';
 
 export function AllowedDomainsTab() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['admin', 'domains'],
     queryFn: () => api<{ domains: string[] }>('/api/admin/settings/allowed-domains'),
   });
@@ -46,23 +46,37 @@ export function AllowedDomainsTab() {
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="flex flex-wrap gap-2">
-          {domains.map((d) => (
-            <Badge key={d} variant="secondary" className="gap-1">
-              {d}
-              <button
-                type="button"
-                aria-label={`remove ${d}`}
-                className="ml-1 opacity-60 hover:opacity-100"
-                onClick={() => setDomains(domains.filter((x) => x !== d))}
-              >
-                ×
-              </button>
-            </Badge>
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex gap-2" aria-hidden>
+            {[0, 1].map((i) => (
+              <div key={i} className="h-6 w-32 animate-pulse rounded-full bg-muted" />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {domains.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No domains yet — add one below to open registration.
+              </p>
+            )}
+            {domains.map((d) => (
+              <Badge key={d} variant="secondary" className="gap-1">
+                {d}
+                <button
+                  type="button"
+                  aria-label={`remove ${d}`}
+                  className="ml-0.5 -mr-1 rounded px-1.5 py-1 opacity-60 transition-opacity hover:opacity-100"
+                  onClick={() => setDomains(domains.filter((x) => x !== d))}
+                >
+                  ×
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2">
           <Input
+            className="min-h-11 md:min-h-8"
             placeholder="example.com"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -73,13 +87,19 @@ export function AllowedDomainsTab() {
               }
             }}
           />
-          <Button type="button" variant="secondary" onClick={addDraft}>
+          <Button
+            type="button"
+            className="min-h-11 md:min-h-8"
+            variant="secondary"
+            onClick={addDraft}
+          >
             Add
           </Button>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div>
           <Button
+            className="min-h-11 md:min-h-8"
             disabled={save.isPending || domains.length === 0}
             onClick={() => save.mutate(domains)}
           >

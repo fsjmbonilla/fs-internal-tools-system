@@ -97,6 +97,35 @@ export const getGmailMessage = (id: string) =>
 export const sendGmail = (input: { to: string; subject: string; body: string }) =>
   api<{ sent: { id: string } }>('/api/gmail/send', { method: 'POST', body: input });
 
+/** Reply in-thread; To/Cc/Subject/threading headers derive server-side. */
+export const replyGmail = (messageId: string, body: string, all = false) =>
+  api<{ sent: { id: string } }>(
+    `/api/gmail/messages/${encodeURIComponent(messageId)}/reply`,
+    { method: 'POST', body: { body, all } },
+  );
+
+/** Save a Gmail draft — a reply draft when replyToMessageId is set. */
+export const saveGmailDraft = (input: {
+  to?: string;
+  subject?: string;
+  body: string;
+  replyToMessageId?: string;
+}) => api<{ draft: { id: string } }>('/api/gmail/drafts', { method: 'POST', body: input });
+
+/** AI-suggested reply text for a message (budget-gated server-side). */
+export const draftGmailReply = (messageId: string, instruction?: string) =>
+  api<{ draft: string }>(
+    `/api/gmail/messages/${encodeURIComponent(messageId)}/draft-reply`,
+    { method: 'POST', body: instruction ? { instruction } : {} },
+  );
+
+/** Forward the message (quoted as text) to a new recipient. */
+export const forwardGmail = (messageId: string, to: string, note?: string) =>
+  api<{ sent: { id: string } }>(
+    `/api/gmail/messages/${encodeURIComponent(messageId)}/forward`,
+    { method: 'POST', body: { to, ...(note ? { note } : {}) } },
+  );
+
 export const getMailboxBinding = () =>
   api<MailboxBinding>('/api/admin/google/support-mailbox');
 

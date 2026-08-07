@@ -198,24 +198,27 @@ export function SheetPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b p-2">
-        <h1 className="mr-auto text-sm font-semibold">{title || 'Sheet'}</h1>
+        {/* Full-width on phones so the lock badge and buttons get their own row. */}
+        <h1 className="w-full min-w-0 truncate text-sm font-semibold md:mr-auto md:w-auto">
+          {title || 'Sheet'}
+        </h1>
 
         {lock && !iAmEditing && (
-          <span className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900">
+          <span className="rounded-md border bg-accent px-2 py-1 text-xs font-medium whitespace-nowrap text-accent-foreground">
             View only — {lock.displayName} is editing
           </span>
         )}
         {savedAt && iAmEditing && (
-          <span className="text-xs text-muted-foreground">Saved {savedAt}</span>
+          <span className="text-xs whitespace-nowrap text-muted-foreground">Saved {savedAt}</span>
         )}
-
-        <Button size="sm" variant="outline" onClick={exportXlsx}>
+        <Button size="sm" variant="outline" className="min-h-11 md:min-h-7" onClick={exportXlsx}>
           Export .xlsx
         </Button>
         {iAmEditing && (
           <Button
             size="sm"
             variant="outline"
+            className="min-h-11 md:min-h-7"
             onClick={() => importRef.current?.click()}
             title="Replaces the whole workbook"
           >
@@ -237,15 +240,25 @@ export function SheetPage() {
 
         {iAmEditing ? (
           <>
-            <Button size="sm" variant="outline" onClick={() => void save('manual')}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="min-h-11 md:min-h-7"
+              onClick={() => void save('manual')}
+            >
               Save now
             </Button>
-            <Button size="sm" onClick={releaseLock}>
+            <Button size="sm" className="min-h-11 md:min-h-7" onClick={releaseLock}>
               Done editing
             </Button>
           </>
         ) : (
-          <Button size="sm" disabled={lock !== null} onClick={takeLock}>
+          <Button
+            size="sm"
+            className="min-h-11 md:min-h-7"
+            disabled={lock !== null}
+            onClick={takeLock}
+          >
             {lock ? 'Locked' : 'Edit'}
           </Button>
         )}
@@ -256,7 +269,9 @@ export function SheetPage() {
           {message}
         </p>
       )}
-      {status === 'loading' && <p className="p-3 text-sm text-muted-foreground">Opening sheet…</p>}
+      {status === 'loading' && (
+        <div className="m-3 flex-1 animate-pulse rounded-md bg-muted" aria-label="Opening sheet" />
+      )}
 
       {/* Univer renders into this element imperatively; React must not touch its children. */}
       <div ref={containerRef} className="min-h-0 flex-1" />

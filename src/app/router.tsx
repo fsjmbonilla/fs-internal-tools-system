@@ -13,6 +13,9 @@ import { RequireAdmin, RequireAuth } from './guards';
  * password. Login and register stay eager — they are the first paint — and
  * AppLayout holds the Suspense boundary the rest fall into.
  */
+const DashboardPage = lazy(() =>
+  import('@/features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+);
 const ChannelPage = lazy(() =>
   import('@/features/chat/ChannelPage').then((m) => ({ default: m.ChannelPage })),
 );
@@ -94,7 +97,8 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: '/', element: <Navigate to="/chat" replace /> },
+          { path: '/', element: <Navigate to="/dashboard" replace /> },
+          { path: '/dashboard', element: <DashboardPage /> },
           {
             path: '/chat',
             element: (

@@ -31,7 +31,7 @@ interface Department {
 
 export function DepartmentsTab() {
   const queryClient = useQueryClient();
-  const { data: deptData } = useQuery({
+  const { data: deptData, isLoading } = useQuery({
     queryKey: ['departments'],
     queryFn: () => api<{ departments: Department[] }>('/api/departments'),
   });
@@ -76,7 +76,7 @@ export function DepartmentsTab() {
       <div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button>New department</Button>
+            <Button className="min-h-11 md:min-h-8">New department</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -96,6 +96,7 @@ export function DepartmentsTab() {
                 />
               </div>
               <Button
+                className="min-h-11 md:min-h-8"
                 disabled={!name.trim() || create.isPending}
                 onClick={() =>
                   create.mutate(
@@ -110,17 +111,31 @@ export function DepartmentsTab() {
                   )
                 }
               >
-                Create
+                {create.isPending ? 'Creating…' : 'Create'}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
+      {isLoading && (
+        <div className="grid gap-4" aria-hidden>
+          {[0, 1].map((i) => (
+            <div key={i} className="h-32 animate-pulse rounded-xl bg-muted" />
+          ))}
+        </div>
+      )}
+
+      {deptData?.departments.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No departments yet — create the first one with New department.
+        </p>
+      )}
+
       {deptData?.departments.map((d) => (
         <Card key={d.id}>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="min-w-0 text-lg">
               {d.name}
               {d.description && (
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -131,12 +146,13 @@ export function DepartmentsTab() {
             <Button
               variant="destructive"
               size="sm"
+              className="min-h-11 shrink-0 md:min-h-7"
               disabled={remove.isPending}
               onClick={() => {
                 if (confirm(`Delete department "${d.name}"?`)) remove.mutate(d.id);
               }}
             >
-              Delete
+              {remove.isPending && remove.variables === d.id ? 'Deleting…' : 'Delete'}
             </Button>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -151,7 +167,7 @@ export function DepartmentsTab() {
                   <button
                     type="button"
                     aria-label={`remove ${userName(m.userId)}`}
-                    className="ml-1 opacity-60 hover:opacity-100"
+                    className="ml-0.5 -mr-1 rounded px-1.5 py-1 opacity-60 transition-opacity hover:opacity-100"
                     onClick={() => removeMember.mutate({ deptId: d.id, userId: m.userId })}
                   >
                     ×
@@ -159,9 +175,9 @@ export function DepartmentsTab() {
                 </Badge>
               ))}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={pickUser} onValueChange={setPickUser}>
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="min-h-11 w-full md:min-h-8 sm:w-52">
                   <SelectValue placeholder="Add member…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -175,7 +191,7 @@ export function DepartmentsTab() {
                 </SelectContent>
               </Select>
               <Select value={pickRole} onValueChange={(v) => setPickRole(v as 'lead' | 'member')}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="min-h-11 w-32 md:min-h-8" aria-label="Role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -185,6 +201,7 @@ export function DepartmentsTab() {
               </Select>
               <Button
                 variant="secondary"
+                className="min-h-11 md:min-h-8"
                 disabled={!pickUser || addMember.isPending}
                 onClick={() =>
                   addMember.mutate(
@@ -193,7 +210,7 @@ export function DepartmentsTab() {
                   )
                 }
               >
-                Add
+                {addMember.isPending ? 'Adding…' : 'Add'}
               </Button>
             </div>
           </CardContent>

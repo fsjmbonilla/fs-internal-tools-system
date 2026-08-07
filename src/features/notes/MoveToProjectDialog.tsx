@@ -64,7 +64,7 @@ export function MoveToProjectDialog({ noteId, noteTitle }: { noteId: number; not
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="min-h-11 md:min-h-7">
           Share…
         </Button>
       </DialogTrigger>

@@ -1,10 +1,11 @@
 import OpenAI from 'openai';
-import { config } from '../../config.js';
 import { logger } from '../../logger.js';
+import { getAiConfig, getSecret } from '../integrationsCache.js';
 import {
   DecisionSchema,
   systemPrompt,
   transcriptOf,
+  type CompletionInput,
   type TriageDecision,
   type TriageInput,
   type TriageProvider,
@@ -47,11 +48,25 @@ const RESPONSE_FORMAT = {
   },
 };
 
-let client: OpenAI | null | undefined;
+let client: OpenAI | null = null;
+let clientApiKey: string | undefined;
 
+/**
+ * The key resolves at call time (admin-set value, else OPENAI_API_KEY) and the
+ * memoized client is keyed by it, so an admin saving a new key on the
+ * Integrations tab takes effect on the next call without a restart.
+ */
 function getClient(): OpenAI | null {
-  if (client !== undefined) return client;
-  client = config.OPENAI_API_KEY ? new OpenAI({ apiKey: config.OPENAI_API_KEY }) : null;
+  const apiKey = getSecret('openai_api_key');
+  if (!apiKey) {
+    client = null;
+    clientApiKey = undefined;
+    return null;
+  }
+  if (!client || clientApiKey !== apiKey) {
+    client = new OpenAI({ apiKey });
+    clientApiKey = apiKey;
+  }
   return client;
 }
 
@@ -59,14 +74,14 @@ export const openaiProvider: TriageProvider = {
   name: 'openai',
 
   isConfigured(): boolean {
-    return Boolean(config.OPENAI_API_KEY);
+    return Boolean(getSecret('openai_api_key'));
   },
 
   async triage(input: TriageInput): Promise<TriageDecision | null> {
     const openai = getClient();
     if (!openai) return null;
 
-    const model = config.AI_MODEL || DEFAULT_MODEL;
+    const model = getAiConfig().model || DEFAULT_MODEL;
     // Report the attempt even if the call throws below: it was dispatched, so it
     // is billable and it must consume the channel's interval.
     let reported = false;
@@ -107,6 +122,40 @@ export const openaiProvider: TriageProvider = {
       report();
       logger.error({ err }, 'AI triage failed');
       return null;
+    }
+  },
+
+  async complete(input: CompletionInput): Promise<string> {
+    const openai = getClient();
+    if (!openai) throw new Error('OPENAI_API_KEY is not configured');
+
+    const model = getAiConfig().model || DEFAULT_MODEL;
+    // Same contract as triage: report a dispatched call exactly once, whatever
+    // it returns, because it is billable either way.
+    let reported = false;
+    const report = (promptTokens = 0, completionTokens = 0) => {
+      if (reported) return;
+      reported = true;
+      input.onUsage?.({ provider: 'openai', model, promptTokens, completionTokens });
+    };
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model,
+        max_completion_tokens: input.maxTokens,
+        messages: [
+          { role: 'system', content: input.system },
+          { role: 'user', content: input.prompt },
+        ],
+      });
+      report(completion.usage?.prompt_tokens, completion.usage?.completion_tokens);
+      const content = completion.choices[0]?.message?.content?.trim();
+      if (!content) throw new Error('The AI returned an empty reply');
+      return content;
+    } catch (err) {
+      // Unlike triage this throws — but the attempt is recorded first.
+      report();
+      throw err;
     }
   },
 };

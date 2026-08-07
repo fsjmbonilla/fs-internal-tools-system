@@ -45,15 +45,22 @@ export function ChannelPage() {
   if (!Number.isFinite(id)) return null;
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <div>
-          <h2 className="font-semibold"># {data?.channel.name ?? '…'}</h2>
-          {data?.channel.topic && <p className="text-xs text-muted-foreground">{data.channel.topic}</p>}
+    <div className="flex h-full flex-col animate-in fade-in duration-150">
+      <header className="flex items-center justify-between gap-2 border-b px-4 py-2 md:py-3">
+        <div className="min-w-0">
+          <h2 className="truncate font-semibold">
+            #{' '}
+            {data?.channel.name ?? (
+              <span className="inline-block h-4 w-24 animate-pulse rounded bg-muted align-middle" />
+            )}
+          </h2>
+          {data?.channel.topic && (
+            <p className="truncate text-xs text-muted-foreground">{data.channel.topic}</p>
+          )}
         </div>
         <button
           type="button"
-          className="text-xs text-muted-foreground underline hover:text-foreground"
+          className="flex min-h-11 shrink-0 items-center text-xs text-muted-foreground underline transition-colors hover:text-foreground md:min-h-0"
           onClick={() => setScheduleOpen(true)}
         >
           Schedule meeting

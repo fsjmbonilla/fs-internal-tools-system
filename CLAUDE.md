@@ -99,11 +99,30 @@ quotes) and produces thousands of lines of noise. This has already happened once
   register function) itself, and the effect is fire-and-forget — wait for it.
 - Files named `*.test.ts` are real suites here; `npm test` is a meaningful gate.
 
-## Current state (2026-08-06)
+## Current state (2026-08-08)
 
-**All master-plan phases (0–13) are code-complete.** What remains is the
-real-Google verification pass (below) and the deferred items (native apps,
-push credentials). Phase plans: `docs/superpowers/plans/2026-08-06-phase12-
+**All master-plan phases (0–13) are code-complete**, plus a large post-plan
+expansion (2026-08-07/08): plum design tokens + mobile-first shell and pages
+(the three `.claude/skills/` — frontend-design, mobile-first, ui-ux — carry the
+rules); Gmail inbox cache (`gmail_cache`, one delta-sync per account per 60s,
+bodies immutable-cached; **changing SANITIZE_OPTS requires nulling cached
+`body_html`**) with full-fidelity rendering in a sandboxed iframe, reply /
+reply-all / forward / drafts / AI draft-reply, and mark-as-read (Gmail-side
+needs the newer gmail.modify grant); Drive GNOME-style browser (thumbnails,
+details/share panel, drag-drop upload, drag-to-move) with Docs/Sheets rendered
+AND edited in-app (export → Univer/markdown → `files.update` converts in place
+— lossy for heavy formatting, the UI says so); month-grid Calendar; VS Code
+Scripts IDE with budget-gated AI assist; notes auto-backup to the owner's own
+Drive (event-bus automation, ids-only events); the `/dashboard` Today page with
+AI summary; routines that run `.py` files from Drive through the runner (managed
+`[routine] <name>` scripts rows, overwritten every tick); and the admin
+**Integrations** tab — AI provider/model/keys + Firebase creds stored encrypted
+in `settings`, env vars as fallback, applied at call time without redeploy
+(secrets share `GOOGLE_TOKEN_ENC_KEY`; rotating it drops them to env fallback).
+
+What remains is the real-Google verification pass (below — partially done live:
+connect/gmail/drive/calendar-view are verified) and the deferred items (native
+apps, push credentials). Phase plans: `docs/superpowers/plans/2026-08-06-phase12-
 google-calendar-gmail.md` and `…phase13-drive.md` — each records its deliberate
 deviations (no Google Picker JS; share-with-domain deferred).
 

@@ -41,6 +41,30 @@ describe('admin routes', () => {
     ).toBe(403);
   });
 
+  it('scripts doc url: unset by default, pinned to Drive/Docs hosts, clearable', async () => {
+    const admin = await makeUser(app, { email: 'a@flowerstore.ph', admin: true });
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${admin.token}`);
+
+    const empty = await auth(request(app).get('/api/admin/settings/scripts-doc-url'));
+    expect(empty.body.url).toBeNull();
+
+    await auth(request(app).put('/api/admin/settings/scripts-doc-url'))
+      .send({ url: 'https://evil.example.com/doc' })
+      .expect(400);
+    await auth(request(app).put('/api/admin/settings/scripts-doc-url'))
+      .send({ url: 'https://docs.google.com/document/d/abc123/edit' })
+      .expect(200);
+
+    const set = await auth(request(app).get('/api/admin/settings/scripts-doc-url'));
+    expect(set.body.url).toBe('https://docs.google.com/document/d/abc123/edit');
+
+    await auth(request(app).put('/api/admin/settings/scripts-doc-url'))
+      .send({ url: null })
+      .expect(200);
+    const cleared = await auth(request(app).get('/api/admin/settings/scripts-doc-url'));
+    expect(cleared.body.url).toBeNull();
+  });
+
   it('role change works; self-demotion blocked; deactivated user cannot log in', async () => {
     const admin = await makeUser(app, { email: 'a@flowerstore.ph', admin: true });
     const member = await makeUser(app, { email: 'm@flowerstore.ph' });

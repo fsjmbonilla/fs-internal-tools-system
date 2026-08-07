@@ -111,7 +111,7 @@ export function NewSupportChannelDialog({
             />
           </div>
           {error && (
-            <p className="text-xs text-red-600" role="alert">
+            <p className="text-xs text-destructive" role="alert">
               {error}
             </p>
           )}

@@ -1,6 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
+import {
+  Calendar,
+  Code2,
+  FolderKanban,
+  HardDrive,
+  LayoutDashboard,
+  LogOut,
+  Mail,
+  Repeat,
+  Settings,
+  ShieldCheck,
+  StickyNote,
+} from 'lucide-react';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, NavLink, useNavigate, useParams } from 'react-router';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { logoutUser } from '@/features/auth/api';
 import { useAuthStore } from '@/features/auth/authStore';
@@ -15,6 +28,21 @@ interface Department {
   name: string;
 }
 
+const NAV = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/notes', label: 'Notes', icon: StickyNote },
+  { to: '/routines', label: 'Routines', icon: Repeat },
+  { to: '/calendar', label: 'Calendar', icon: Calendar },
+  { to: '/gmail', label: 'Gmail', icon: Mail },
+  { to: '/drive', label: 'Drive', icon: HardDrive },
+];
+
+/**
+ * One nav, two containers: the permanent `md:` sidebar and the mobile Sheet
+ * drawer both render this. Height comes from the container (`h-full`), so it
+ * works inside either.
+ */
 export function Sidebar() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
@@ -45,42 +73,53 @@ export function Sidebar() {
   const orgWide = channels.filter((c) => c.departmentId === null && c.type !== 'dm');
 
   return (
-    <aside className="flex h-dvh w-64 flex-col bg-[#3f0e40] text-white">
-      <div className="border-b border-white/10 p-4 font-semibold">FS Internal System</div>
+    <aside className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="border-b border-sidebar-border p-4 pt-[max(1rem,env(safe-area-inset-top))] font-semibold">
+        FS Internal System
+      </div>
       <ScrollArea className="flex-1 px-2 py-2">
-        <Link to="/projects" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
-          Projects
-        </Link>
-        <Link to="/notes" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
-          Notes
-        </Link>
-        <Link to="/routines" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
-          Routines
-        </Link>
-        <Link to="/calendar" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
-          Calendar
-        </Link>
-        <Link to="/gmail" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
-          Gmail
-        </Link>
-        <Link to="/drive" className="mb-1 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
-          Drive
-        </Link>
-        {/* Admin-only, matching the route and the API — a non-admin gets 404 on
-            every scripts endpoint, so showing the link would only mislead. */}
-        {user?.role === 'admin' && (
-          <Link to="/scripts" className="mb-4 block rounded px-2 py-1 text-sm text-white/80 hover:bg-white/10">
-            Scripts
-          </Link>
-        )}
-        {user?.role !== 'admin' && <div className="mb-4" />}
+        <nav className="mb-4 grid gap-0.5">
+          {NAV.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors md:min-h-8 ${
+                  isActive
+                    ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                    : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+                }`
+              }
+            >
+              <Icon className="size-4 shrink-0" />
+              {label}
+            </NavLink>
+          ))}
+          {/* Admin-only, matching the route and the API — a non-admin gets 404 on
+              every scripts endpoint, so showing the link would only mislead. */}
+          {user?.role === 'admin' && (
+            <NavLink
+              to="/scripts"
+              className={({ isActive }) =>
+                `flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors md:min-h-8 ${
+                  isActive
+                    ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                    : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+                }`
+              }
+            >
+              <Code2 className="size-4 shrink-0" />
+              Scripts
+            </NavLink>
+          )}
+        </nav>
         <SidebarSection
           title="Channels"
           action={
             <span className="flex items-center gap-2">
               <button
                 type="button"
-                className="text-xs text-white/60 hover:text-white"
+                className="text-xs text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground"
                 onClick={() => setSupportOpen(true)}
               >
                 + Support
@@ -93,7 +132,7 @@ export function Sidebar() {
             <ChannelLink key={c.id} channel={c} active={String(c.id) === channelId} />
           ))}
           {channels.filter((c) => c.type !== 'dm').length === 0 && (
-            <p className="px-2 py-1 text-xs text-white/40">
+            <p className="px-2.5 py-1 text-xs text-sidebar-foreground/45">
               No channels yet — use + to create one.
             </p>
           )}
@@ -110,35 +149,44 @@ export function Sidebar() {
             <DmLink key={dm.id} dm={dm} active={String(dm.id) === channelId} />
           ))}
           {dms.length === 0 && (
-            <p className="px-2 py-1 text-xs text-white/40">
+            <p className="px-2.5 py-1 text-xs text-sidebar-foreground/45">
               None yet — press ⌘K / Ctrl-K and pick someone.
             </p>
           )}
         </SidebarSection>
       </ScrollArea>
-      <div className="flex items-center justify-between border-t border-white/10 p-3 text-sm">
-        <div className="flex flex-col">
-          <span>{user?.displayName}</span>
-          <span className="flex gap-2">
-            <Link to="/settings" className="text-xs text-white/60 underline">
+      <div className="flex items-center justify-between gap-2 border-t border-sidebar-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-sm">
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate">{user?.displayName}</span>
+          <span className="flex gap-1">
+            <Link
+              to="/settings"
+              className="flex min-h-8 items-center gap-1 rounded-md px-1.5 text-xs text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+            >
+              <Settings className="size-3.5" />
               Settings
             </Link>
             {user?.role === 'admin' && (
-              <Link to="/admin" className="text-xs text-white/60 underline">
-                Administration
+              <Link
+                to="/admin"
+                className="flex min-h-8 items-center gap-1 rounded-md px-1.5 text-xs text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+              >
+                <ShieldCheck className="size-3.5" />
+                Admin
               </Link>
             )}
           </span>
         </div>
         <button
           type="button"
-          className="text-xs text-white/60 underline hover:text-white"
+          aria-label="Sign out"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground md:min-h-9 md:min-w-9"
           onClick={async () => {
             await logoutUser();
             navigate('/login');
           }}
         >
-          Sign out
+          <LogOut className="size-4" />
         </button>
       </div>
       <NewSupportChannelDialog
@@ -161,7 +209,7 @@ function SidebarSection({
 }) {
   return (
     <div className="mb-4">
-      <div className="flex items-center justify-between px-2 py-1 text-xs font-semibold uppercase tracking-wide text-white/50">
+      <div className="flex items-center justify-between px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/50">
         <span>{title}</span>
         {action}
       </div>
@@ -177,13 +225,13 @@ function DmLink({ dm, active }: { dm: DmSummary; active: boolean }) {
   return (
     <Link
       to={`/chat/${dm.id}`}
-      className={`flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-white/10 ${
-        active ? 'bg-white/20' : ''
-      } ${unread ? 'font-bold' : 'text-white/80'}`}
+      className={`flex min-h-11 items-center justify-between rounded-md px-2.5 text-sm transition-colors hover:bg-sidebar-accent/60 md:min-h-8 ${
+        active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+      } ${unread ? 'font-bold' : 'text-sidebar-foreground/75'}`}
     >
       <span className="truncate">{label}</span>
       {unread && (
-        <span className="ml-1 rounded-full bg-red-500 px-1.5 text-xs font-semibold">
+        <span className="ml-1 rounded-full bg-destructive px-1.5 text-xs font-semibold text-white">
           {dm.unreadCount}
         </span>
       )}
@@ -197,9 +245,9 @@ function ChannelLink({ channel, active }: { channel: Channel; active: boolean })
   return (
     <Link
       to={`/chat/${channel.id}`}
-      className={`flex items-center justify-between rounded px-2 py-1 text-sm hover:bg-white/10 ${
-        active ? 'bg-white/20' : ''
-      } ${unread ? 'font-bold' : 'text-white/80'}`}
+      className={`flex min-h-11 items-center justify-between rounded-md px-2.5 text-sm transition-colors hover:bg-sidebar-accent/60 md:min-h-8 ${
+        active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
+      } ${unread ? 'font-bold' : 'text-sidebar-foreground/75'}`}
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate"># {channel.name}</span>
@@ -207,7 +255,7 @@ function ChannelLink({ channel, active }: { channel: Channel; active: boolean })
           // Not decoration: the assistant reads this channel and can file a ticket
           // from what you write, so it should not look like an ordinary channel.
           <span
-            className="shrink-0 rounded bg-white/20 px-1 text-[10px] font-medium uppercase tracking-wide"
+            className="shrink-0 rounded bg-sidebar-primary/25 px-1 text-[10px] font-medium uppercase tracking-wide"
             title="Support channel — the assistant reads this and may file a ticket"
           >
             support
@@ -215,7 +263,7 @@ function ChannelLink({ channel, active }: { channel: Channel; active: boolean })
         )}
       </span>
       {unread && (
-        <span className="rounded-full bg-red-500 px-1.5 text-xs font-semibold">
+        <span className="rounded-full bg-destructive px-1.5 text-xs font-semibold text-white">
           {channel.unreadCount}
         </span>
       )}

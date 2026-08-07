@@ -1,0 +1,1 @@
+ALTER TABLE `notes` ADD `drive_file_id` varchar(64);

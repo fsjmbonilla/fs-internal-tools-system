@@ -32,7 +32,7 @@ interface AdminUser {
 export function UsersTab() {
   const queryClient = useQueryClient();
   const me = useAuthStore((s) => s.user);
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => api<{ users: AdminUser[] }>('/api/admin/users'),
   });
@@ -43,8 +43,21 @@ export function UsersTab() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
   });
 
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="grid gap-2 pt-6" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-11 animate-pulse rounded bg-muted" />
+          ))}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
+      {/* Table ships its own overflow-x-auto container — wide rows scroll here, not the page. */}
       <CardContent className="pt-6">
         <Table>
           <TableHeader>
@@ -71,7 +84,7 @@ export function UsersTab() {
                         patch.mutate({ id: u.id, role: role as 'admin' | 'member' })
                       }
                     >
-                      <SelectTrigger className="w-28">
+                      <SelectTrigger className="min-h-11 w-28 md:min-h-8" aria-label="Role">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -82,6 +95,7 @@ export function UsersTab() {
                   </TableCell>
                   <TableCell>
                     <Switch
+                      aria-label={`${u.displayName} active`}
                       checked={u.isActive}
                       disabled={self || patch.isPending}
                       onCheckedChange={(isActive) => patch.mutate({ id: u.id, isActive })}

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { eq, sql } from 'drizzle-orm';
-import { config } from '../config.js';
+import { getAiConfig, getSecret } from './integrationsCache.js';
 import { db } from '../db/index.js';
 import { routineRuns, routines } from '../db/schema/index.js';
 import { logger } from '../logger.js';
@@ -11,6 +11,7 @@ import { isRefusal, jsonSchemaFor, toolsForScopes } from './agentTools.js';
 import { getBotUserId } from './botService.js';
 import { findOrCreateDm } from './channelService.js';
 import { sendMessage } from './messageService.js';
+import { runDriveScriptRoutine } from './routineScriptRunner.js';
 
 export type RoutineRow = typeof routines.$inferSelect;
 export type RoutineRunRow = typeof routineRuns.$inferSelect;
@@ -38,17 +39,45 @@ const MAX_TOKENS_PER_RUN = 60_000;
 const MODEL = 'claude-opus-5';
 const MAX_TOKENS_PER_TURN = 4096;
 
-let client: Anthropic | null | undefined;
+let client: Anthropic | null = null;
+let clientApiKey: string | undefined;
+/** A seam-injected client wins unconditionally — no key resolution at all. */
+let clientPinned = false;
 
+/**
+ * The key resolves per run (admin-set integrations value, else
+ * ANTHROPIC_API_KEY) and the client is memoized per key, so a runtime key
+ * change applies from the next routine run.
+ */
 function getClient(): Anthropic | null {
-  if (client !== undefined) return client;
-  client = config.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: config.ANTHROPIC_API_KEY }) : null;
+  if (clientPinned) return client;
+  const apiKey = getSecret('anthropic_api_key');
+  if (!apiKey) {
+    client = null;
+    clientApiKey = undefined;
+    return null;
+  }
+  if (!client || clientApiKey !== apiKey) {
+    client = new Anthropic({ apiKey });
+    clientApiKey = apiKey;
+  }
   return client;
 }
 
 /** Test seam: lets a suite drive the loop without an API key or a network call. */
 export function setRoutineClient(next: Anthropic | null): void {
   client = next;
+  clientPinned = true;
+}
+
+/**
+ * Routines are Claude-only by design, so a configured model is honoured only
+ * when the active provider is anthropic — an admin (or AI_MODEL) pointing
+ * triage at an OpenAI model must not leak that model name into a Claude call.
+ */
+function routineModel(): string {
+  const ai = getAiConfig();
+  return (ai.provider === 'anthropic' && ai.model) || MODEL;
 }
 
 function systemPrompt(routine: RoutineRow): string {
@@ -66,6 +95,13 @@ export async function runRoutine(
   routine: RoutineRow,
   trigger: 'schedule' | 'manual',
 ): Promise<RoutineRunRow> {
+  if (routine.kind === 'drive_script') {
+    // Not an AI run at all: no model, no token budget, no aiBudgetService. The
+    // tick fetches the owner's Drive file and queues it through the scripts
+    // sandbox — the runner service executes it, never this process.
+    return runDriveScriptRoutine(routine, trigger);
+  }
+
   const [{ id: runId }] = await db
     .insert(routineRuns)
     .values({ routineId: routine.id, trigger, status: 'running' })
@@ -129,7 +165,7 @@ export async function runRoutine(
       iterations++;
 
       const response = await anthropic.messages.create({
-        model: config.AI_MODEL || MODEL,
+        model: routineModel(),
         max_tokens: MAX_TOKENS_PER_TURN,
         system: systemPrompt(routine),
         tools: tools.map((t) => ({
@@ -148,7 +184,7 @@ export async function runRoutine(
       // one place answers "what did AI cost us".
       await recordAiUsage(routine.outputChannelId ?? 0, {
         provider: 'anthropic',
-        model: config.AI_MODEL || MODEL,
+        model: routineModel(),
         promptTokens: response.usage?.input_tokens ?? 0,
         completionTokens: response.usage?.output_tokens ?? 0,
       }).catch(() => undefined);

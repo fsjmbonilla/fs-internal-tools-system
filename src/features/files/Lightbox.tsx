@@ -37,7 +37,13 @@ export function Lightbox({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl">
-        {src && <img src={src} alt="attachment preview" className="max-h-[80vh] w-full object-contain" />}
+        {src ? (
+          <img src={src} alt="attachment preview" className="max-h-[80vh] w-full object-contain" />
+        ) : (
+          // The image arrives via an authenticated fetch, so there is a real
+          // wait — show a placeholder shaped like it rather than an empty dialog.
+          <div className="aspect-video w-full animate-pulse rounded-md bg-muted" />
+        )}
       </DialogContent>
     </Dialog>
   );

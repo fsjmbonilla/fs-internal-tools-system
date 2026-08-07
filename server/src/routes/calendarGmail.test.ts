@@ -125,8 +125,10 @@ describe('gmail', () => {
     unread: true,
     bodyText: null,
     bodyHtml:
-      '<p onclick="alert(1)">hi</p><script>steal()</script>' +
-      '<img src="https://tracker.example/pixel.gif">' +
+      '<p onclick="alert(1)" style="color:#e91e63">hi</p><script>steal()</script>' +
+      '<img src="https://cdn.example/hero.png" onerror="steal()">' +
+      '<img src="data:image/svg+xml;base64,PHN2Zz4=">' +
+      '<table width="600" bgcolor="#fafafa"><tr><td align="center">cell</td></tr></table>' +
       '<a href="javascript:alert(1)">click</a><a href="https://ok.example">fine</a>',
   };
 
@@ -139,16 +141,25 @@ describe('gmail', () => {
     expect(res.body.messages[0].subject).toBe('hello');
   });
 
-  it('sanitizes an HTML body: no scripts, handlers, images, or js: links', async () => {
+  it('sanitizes an HTML body: full layout survives, nothing executable does', async () => {
     const { token } = await connectedUser();
     fake.inbox.push(hostileMail);
     const res = await request(app).get('/api/gmail/messages/m1').set(auth(token));
     const html: string = res.body.message.bodyHtml;
     expect(html).toContain('hi');
+    // Executable material is gone…
     expect(html).not.toContain('<script');
     expect(html).not.toContain('onclick');
-    expect(html).not.toContain('<img');
+    expect(html).not.toContain('onerror');
     expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('data:image');
+    // …while presentation survives: inline styles, table layout, https images.
+    expect(html).toContain('style="color:#e91e63"');
+    expect(html).toContain('width="600"');
+    expect(html).toContain('align="center"');
+    expect(html).toContain('src="https://cdn.example/hero.png"');
+    expect(html).toContain('referrerpolicy="no-referrer"');
+    expect(html).toContain('loading="lazy"');
     expect(html).toContain('https://ok.example');
   });
 
@@ -185,6 +196,128 @@ describe('gmail', () => {
     const res = await request(app).get('/api/gmail/messages/m2').set(auth(token));
     expect(res.body.message.bodyHtml).toContain('target="_blank"');
     expect(res.body.message.bodyHtml).toContain('rel="noopener noreferrer nofollow"');
+  });
+
+  it('caches the inbox: within the sync window Google is not asked again', async () => {
+    const { token } = await connectedUser();
+    fake.inbox.push({ ...hostileMail, internalDate: 1_000 });
+    const first = await request(app).get('/api/gmail/messages').set(auth(token));
+    expect(first.body.messages).toHaveLength(1);
+
+    // New mail arrives at Google, but the last sync is fresh — cache serves.
+    fake.inbox.push({ ...hostileMail, id: 'm2', subject: 'newer', internalDate: 2_000 });
+    const second = await request(app).get('/api/gmail/messages').set(auth(token));
+    expect(second.body.messages).toHaveLength(1);
+
+    // Age the sync state past the window: only the delta is fetched, appended.
+    const { db } = await import('../db/index.js');
+    const { sql } = await import('drizzle-orm');
+    await db.execute(sql`UPDATE gmail_sync_state SET last_sync_at = NOW() - INTERVAL 5 MINUTE`);
+    const third = await request(app).get('/api/gmail/messages').set(auth(token));
+    expect(third.body.messages).toHaveLength(2);
+    expect(third.body.messages[0].subject).toBe('newer');
+  });
+
+  it('caches a body on first open and serves it after Google forgets the message', async () => {
+    const { token } = await connectedUser();
+    fake.inbox.push({ ...hostileMail, internalDate: 1_000 });
+    const first = await request(app).get('/api/gmail/messages/m1').set(auth(token));
+    expect(first.status).toBe(200);
+    expect(first.body.message.bodyHtml).not.toContain('<script');
+
+    fake.inbox.length = 0; // Google no longer returns it; the cache must.
+    const second = await request(app).get('/api/gmail/messages/m1').set(auth(token));
+    expect(second.status).toBe(200);
+    expect(second.body.message.bodyHtml).toContain('hi');
+    expect(second.body.message.bodyHtml).not.toContain('<script');
+    expect(second.body.message.to).toBe('me@flowerstore.ph');
+  });
+
+  it('replies inside the original thread with a derived subject', async () => {
+    const { token } = await connectedUser();
+    fake.inbox.push({ ...hostileMail, internalDate: 1_000 });
+    const res = await request(app)
+      .post('/api/gmail/messages/m1/reply')
+      .set(auth(token))
+      .send({ body: 'Thanks, on it.' });
+    expect(res.status).toBe(201);
+    expect(fake.sent).toEqual([
+      {
+        to: 'attacker@example.com',
+        subject: 'Re: hello',
+        body: 'Thanks, on it.',
+        threadId: 't1',
+      },
+    ]);
+  });
+
+  it('opening a message marks it read in the cache and asks Gmail to clear UNREAD', async () => {
+    const { token } = await connectedUser();
+    fake.inbox.push({ ...hostileMail, unread: true, internalDate: 1_000 });
+    const before = await request(app).get('/api/gmail/messages').set(auth(token));
+    expect(before.body.messages[0].unread).toBe(true);
+
+    await request(app).get('/api/gmail/messages/m1').set(auth(token)).expect(200);
+    expect(fake.readMarks).toContain('m1');
+
+    // Refresh (still inside the sync window → served from cache): stays read.
+    const after = await request(app).get('/api/gmail/messages').set(auth(token));
+    expect(after.body.messages[0].unread).toBe(false);
+  });
+
+  it('reply-all Ccs the original recipients; forward quotes the original to a new address', async () => {
+    const { token } = await connectedUser();
+    fake.inbox.push({ ...hostileMail, internalDate: 1_000 });
+
+    await request(app)
+      .post('/api/gmail/messages/m1/reply')
+      .set(auth(token))
+      .send({ body: 'Looping everyone in.', all: true })
+      .expect(201);
+    expect(fake.sent[0]).toMatchObject({
+      to: 'attacker@example.com',
+      cc: 'me@flowerstore.ph',
+      threadId: 't1',
+    });
+
+    await request(app)
+      .post('/api/gmail/messages/m1/forward')
+      .set(auth(token))
+      .send({ to: 'colleague@flowerstore.ph', note: 'FYI' })
+      .expect(201);
+    const fwd = fake.sent[1];
+    expect(fwd.to).toBe('colleague@flowerstore.ph');
+    expect(fwd.subject).toBe('Fwd: hello');
+    expect(fwd.body).toContain('FYI');
+    expect(fwd.body).toContain('Forwarded message');
+    expect(fwd.body).toContain('attacker@example.com');
+    expect(fwd.body).not.toContain('<script');
+
+    await request(app)
+      .post('/api/gmail/messages/m1/forward')
+      .set(auth(token))
+      .send({ to: 'not-an-email' })
+      .expect(400);
+  });
+
+  it('saves compose and reply drafts', async () => {
+    const { token } = await connectedUser();
+    fake.inbox.push({ ...hostileMail, internalDate: 1_000 });
+
+    await request(app)
+      .post('/api/gmail/drafts')
+      .set(auth(token))
+      .send({ to: 'client@example.com', subject: 'Quote', body: 'Draft text' })
+      .expect(201);
+    expect(fake.drafts[0]).toMatchObject({ to: 'client@example.com', subject: 'Quote' });
+
+    await request(app)
+      .post('/api/gmail/drafts')
+      .set(auth(token))
+      .send({ body: 'Half-written reply', replyToMessageId: 'm1' })
+      .expect(201);
+    expect(fake.drafts[1]).toMatchObject({ subject: 'Re: hello', threadId: 't1' });
+    expect(fake.sent).toHaveLength(0); // drafts, not sends
   });
 
   it('sends mail through the connected account', async () => {

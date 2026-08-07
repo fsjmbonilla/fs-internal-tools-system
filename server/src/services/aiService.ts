@@ -1,5 +1,5 @@
 import { activeProvider } from './ai/index.js';
-import type { TriageDecision, TriageInput } from './ai/triage.js';
+import type { CompletionInput, TriageDecision, TriageInput } from './ai/triage.js';
 
 /**
  * AI triage, provider-agnostic.
@@ -35,3 +35,15 @@ export async function triageSupportConversation(
 ): Promise<TriageDecision | null> {
   return activeProvider().triage(input);
 }
+
+/**
+ * One plain-text completion on whichever provider AI_PROVIDER selects — the
+ * generic paid call behind non-triage features (the dashboard's day summary).
+ * Unlike triage this THROWS on failure: its callers are interactive endpoints
+ * that surface the error, not automations that must fail soft.
+ */
+export async function completeText(input: CompletionInput): Promise<string> {
+  return activeProvider().complete(input);
+}
+
+export type { CompletionInput } from './ai/triage.js';
